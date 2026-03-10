@@ -1,0 +1,88 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/db'
+import { canManageBranding } from '@/lib/permissions'
+import { saveUpload, UploadError } from '@/lib/upload'
+import type { Role } from '@prisma/client'
+
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/
+
+export async function POST(req: NextRequest) {
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!canManageBranding(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  let formData: FormData
+  try {
+    formData = await req.formData()
+  } catch {
+    return NextResponse.json({ error: 'Invalid form data' }, { status: 400 })
+  }
+
+  const orgName = formData.get('orgName')
+  const primaryColor = formData.get('primaryColor')
+  const accentColor = formData.get('accentColor')
+  const logoFile = formData.get('logo')
+
+  if (typeof orgName !== 'string' || orgName.trim().length === 0 || orgName.length > 128) {
+    return NextResponse.json({ error: 'orgName is required (max 128 chars)' }, { status: 400 })
+  }
+
+  if (typeof primaryColor !== 'string' || !HEX_COLOR_RE.test(primaryColor)) {
+    return NextResponse.json({ error: 'primaryColor must be a valid hex color' }, { status: 400 })
+  }
+
+  if (typeof accentColor !== 'string' || !HEX_COLOR_RE.test(accentColor)) {
+    return NextResponse.json({ error: 'accentColor must be a valid hex color' }, { status: 400 })
+  }
+
+  let logoPath: string | undefined
+
+  if (logoFile instanceof File && logoFile.size > 0) {
+    // Limit logo to 5 MB
+    if (logoFile.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Logo must be 5 MB or smaller' }, { status: 413 })
+    }
+
+    const buffer = Buffer.from(await logoFile.arrayBuffer())
+
+    try {
+      const result = await saveUpload(buffer, logoFile.name)
+      logoPath = result.storagePath
+    } catch (err) {
+      if (err instanceof UploadError) {
+        return NextResponse.json({ error: err.message }, { status: err.statusCode })
+      }
+      console.error('Logo upload error:', err)
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    }
+  }
+
+  const data: {
+    orgName: string
+    primaryColor: string
+    accentColor: string
+    logoPath?: string
+  } = {
+    orgName: orgName.trim(),
+    primaryColor,
+    accentColor,
+  }
+
+  if (logoPath) {
+    data.logoPath = logoPath
+  }
+
+  const branding = await prisma.brandingSetting.upsert({
+    where: { id: 'default' },
+    update: data,
+    create: { id: 'default', ...data },
+  })
+
+  return NextResponse.json(branding)
+}

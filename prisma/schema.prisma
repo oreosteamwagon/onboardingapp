@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  PAYROLL
+  HR
+  SUPERVISOR
+  ADMIN
+}
+
+model User {
+  id           String     @id @default(cuid())
+  username     String     @unique
+  email        String     @unique
+  passwordHash String
+  role         Role       @default(USER)
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  userTasks    UserTask[]
+  documents    Document[]
+
+  @@index([username])
+  @@index([email])
+}
+
+model BrandingSetting {
+  id           String   @id @default(cuid())
+  orgName      String   @default("My Organization")
+  logoPath     String?
+  primaryColor String   @default("#2563eb")
+  accentColor  String   @default("#7c3aed")
+  updatedAt    DateTime @updatedAt
+}
+
+model OnboardingTask {
+  id           String     @id @default(cuid())
+  title        String
+  description  String?
+  assignedRole Role[]
+  order        Int        @default(0)
+  createdAt    DateTime   @default(now())
+  userTasks    UserTask[]
+}
+
+model UserTask {
+  id          String          @id @default(cuid())
+  userId      String
+  taskId      String
+  completed   Boolean         @default(false)
+  completedAt DateTime?
+  user        User            @relation(fields: [userId], references: [id])
+  task        OnboardingTask  @relation(fields: [taskId], references: [id])
+
+  @@unique([userId, taskId])
+  @@index([userId])
+  @@index([taskId])
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  uploadedBy  String
+  filename    String
+  storagePath String   @unique
+  category    String   @default("general")
+  uploadedAt  DateTime @default(now())
+  uploader    User     @relation(fields: [uploadedBy], references: [id])
+
+  @@index([uploadedBy])
+}

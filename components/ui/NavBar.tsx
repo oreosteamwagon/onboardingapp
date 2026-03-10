@@ -39,6 +39,14 @@ export default function NavBar({ user }: NavBarProps) {
             >
               Documents
             </Link>
+            {isHrOrAbove && (
+              <Link
+                href="/admin/tasks"
+                className="text-sm hover:text-white/80 transition-colors"
+              >
+                Tasks
+              </Link>
+            )}
             {isAdmin && (
               <>
                 <Link

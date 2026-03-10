@@ -41,6 +41,13 @@ export function canManageBranding(role: Role): boolean {
   return role === Role.ADMIN
 }
 
+// Any authenticated user may upload a document to complete an UPLOAD-type onboarding task
+// assigned to their role. Access is governed by the task's assignedRole array, NOT by
+// canUploadDocuments (which gates general document uploads to HR+).
+export function canCompleteUploadTask(_role: Role): boolean {
+  return true
+}
+
 // Returns allowed roles from a comma-separated header or session
 export function assertRole(
   userRole: Role | undefined | null,

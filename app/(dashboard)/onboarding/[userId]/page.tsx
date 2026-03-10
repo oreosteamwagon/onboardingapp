@@ -45,9 +45,14 @@ export default async function OnboardingPage({ params }: PageProps) {
     orderBy: { order: 'asc' },
   })
 
-  // Get existing UserTask records
+  // Get existing UserTask records, including linked document filename (not storagePath)
   const userTasks = await prisma.userTask.findMany({
     where: { userId: viewingUserId },
+    include: {
+      document: {
+        select: { filename: true },
+      },
+    },
   })
 
   const userTaskMap = new Map(userTasks.map((ut) => [ut.taskId, ut]))
@@ -58,10 +63,12 @@ export default async function OnboardingPage({ params }: PageProps) {
       id: task.id,
       title: task.title,
       description: task.description,
+      taskType: task.taskType,
       order: task.order,
       completed: ut?.completed ?? false,
       completedAt: ut?.completedAt?.toISOString() ?? null,
       userTaskId: ut?.id ?? null,
+      documentFilename: ut?.document?.filename ?? null,
     }
   })
 

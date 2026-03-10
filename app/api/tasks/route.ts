@@ -2,11 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageTasks } from '@/lib/permissions'
-import type { Role } from '@prisma/client'
+import { checkTaskMgmtRateLimit } from '@/lib/ratelimit'
+import {
+  validateTitle,
+  validateDescription,
+  validateAssignedRole,
+  validateTaskType,
+  validateOrder,
+} from '@/lib/validation'
+import type { Role, TaskType } from '@prisma/client'
 
-const VALID_ROLES: Role[] = ['USER', 'PAYROLL', 'HR', 'SUPERVISOR', 'ADMIN']
-
-// GET /api/tasks — list all onboarding tasks (HR+ only)
+// GET /api/tasks — list all onboarding task definitions (HR+ only)
 export async function GET() {
   const session = await auth()
   if (!session?.user) {
@@ -24,7 +30,7 @@ export async function GET() {
   return NextResponse.json(tasks)
 }
 
-// POST /api/tasks — create a task (HR+ only)
+// POST /api/tasks — create a task definition (HR+ only)
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
@@ -33,6 +39,12 @@ export async function POST(req: NextRequest) {
 
   if (!canManageTasks(session.user.role as Role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  try {
+    await checkTaskMgmtRateLimit(session.user.id)
+  } catch {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
 
   let body: unknown
@@ -46,39 +58,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { title, description, assignedRole, order } = body as Record<string, unknown>
+  const { title, description, taskType, assignedRole, order } = body as Record<string, unknown>
 
-  if (typeof title !== 'string' || title.trim().length === 0 || title.length > 256) {
-    return NextResponse.json({ error: 'title is required (max 256 chars)' }, { status: 400 })
-  }
+  const titleErr = validateTitle(title)
+  if (titleErr) return NextResponse.json({ error: titleErr }, { status: 400 })
 
-  if (description !== undefined && (typeof description !== 'string' || description.length > 2000)) {
-    return NextResponse.json({ error: 'description must be a string (max 2000 chars)' }, { status: 400 })
-  }
+  const descErr = validateDescription(description)
+  if (descErr) return NextResponse.json({ error: descErr }, { status: 400 })
 
-  if (!Array.isArray(assignedRole) || assignedRole.length === 0) {
-    return NextResponse.json({ error: 'assignedRole must be a non-empty array of roles' }, { status: 400 })
-  }
+  const typeErr = validateTaskType(taskType)
+  if (typeErr) return NextResponse.json({ error: typeErr }, { status: 400 })
 
-  for (const r of assignedRole) {
-    if (!VALID_ROLES.includes(r as Role)) {
-      return NextResponse.json({ error: `Invalid role: ${String(r)}` }, { status: 400 })
-    }
-  }
+  const roleErr = validateAssignedRole(assignedRole)
+  if (roleErr) return NextResponse.json({ error: roleErr }, { status: 400 })
 
   const task = await prisma.onboardingTask.create({
     data: {
-      title: title.trim(),
+      title: (title as string).trim(),
       description: typeof description === 'string' ? description.trim() : null,
+      taskType: (taskType as TaskType | undefined) ?? 'STANDARD',
       assignedRole: assignedRole as Role[],
-      order: typeof order === 'number' ? Math.floor(order) : 0,
+      order: validateOrder(order),
     },
   })
 
   return NextResponse.json(task, { status: 201 })
 }
 
-// PATCH /api/tasks — mark a task complete/incomplete for a user
+// PATCH /api/tasks — mark a STANDARD task complete/incomplete for the authenticated user
+// UPLOAD tasks are completed exclusively via POST /api/tasks/[taskId]/upload
 export async function PATCH(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
@@ -99,22 +107,33 @@ export async function PATCH(req: NextRequest) {
   const { userId, taskId, completed } = body as Record<string, unknown>
 
   if (typeof userId !== 'string' || typeof taskId !== 'string' || typeof completed !== 'boolean') {
-    return NextResponse.json({ error: 'userId, taskId, and completed are required' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'userId, taskId, and completed are required' },
+      { status: 400 },
+    )
   }
 
-  // Users can only update their own tasks
+  // Object-level check: users can only update their own task records
   if (userId !== session.user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  // Verify task is assigned to user's role
+  // Verify task exists, is assigned to user's role, and is STANDARD type
   const task = await prisma.onboardingTask.findUnique({
     where: { id: taskId },
-    select: { assignedRole: true },
+    select: { assignedRole: true, taskType: true },
   })
 
   if (!task) {
     return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+  }
+
+  // UPLOAD tasks are completed via file upload only — not by checkbox
+  if (task.taskType === 'UPLOAD') {
+    return NextResponse.json(
+      { error: 'UPLOAD tasks must be completed by uploading a file' },
+      { status: 409 },
+    )
   }
 
   if (!task.assignedRole.includes(session.user.role as Role)) {

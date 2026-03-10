@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -13,6 +14,11 @@ enum Role {
   HR
   SUPERVISOR
   ADMIN
+}
+
+enum TaskType {
+  STANDARD
+  UPLOAD
 }
 
 model User {
@@ -43,9 +49,11 @@ model OnboardingTask {
   id           String     @id @default(cuid())
   title        String
   description  String?
+  taskType     TaskType   @default(STANDARD)
   assignedRole Role[]
   order        Int        @default(0)
   createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
   userTasks    UserTask[]
 }
 
@@ -55,8 +63,10 @@ model UserTask {
   taskId      String
   completed   Boolean         @default(false)
   completedAt DateTime?
+  documentId  String?         @unique
   user        User            @relation(fields: [userId], references: [id])
   task        OnboardingTask  @relation(fields: [taskId], references: [id])
+  document    Document?       @relation(fields: [documentId], references: [id])
 
   @@unique([userId, taskId])
   @@index([userId])
@@ -64,13 +74,15 @@ model UserTask {
 }
 
 model Document {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   uploadedBy  String
   filename    String
-  storagePath String   @unique
-  category    String   @default("general")
-  uploadedAt  DateTime @default(now())
-  uploader    User     @relation(fields: [uploadedBy], references: [id])
+  storagePath String    @unique
+  category    String    @default("general")
+  uploadedAt  DateTime  @default(now())
+  uploader    User      @relation(fields: [uploadedBy], references: [id])
+  // userTask is null for general documents; set when document proves an UPLOAD task completion
+  userTask    UserTask?
 
   @@index([uploadedBy])
 }

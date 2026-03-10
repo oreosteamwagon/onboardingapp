@@ -5,6 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 OnboardingApp — project is in initial setup. This file will be updated once the tech stack and project structure are established.
 
+## Style
+- Never use emojis in code, comments, or commit messages
+
 ## Git Workflow
 After completing any task that modifies files, commit the changes to the local git repository:
 1. Stage only the relevant files (avoid `git add -A` or `git add .`)

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const { GET, POST: nextAuthPost } = handlers
 
-async function POST(req: NextRequest, ctx: { params: Promise<{ nextauth: string[] }> }) {
+async function POST(req: NextRequest) {
   const url = req.nextUrl.pathname
 
   if (url.includes('/callback/credentials')) {
@@ -23,7 +23,7 @@ async function POST(req: NextRequest, ctx: { params: Promise<{ nextauth: string[
     }
   }
 
-  return nextAuthPost(req, ctx)
+  return nextAuthPost(req)
 }
 
 export { GET, POST }

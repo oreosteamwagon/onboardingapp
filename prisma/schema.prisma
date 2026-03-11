@@ -21,16 +21,26 @@ enum TaskType {
   UPLOAD
 }
 
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
-  id           String     @id @default(cuid())
-  username     String     @unique
-  email        String     @unique
-  passwordHash String
-  role         Role       @default(USER)
-  active       Boolean    @default(true)
-  createdAt    DateTime   @default(now())
-  userTasks    UserTask[]
-  documents    Document[]
+  id                   String         @id @default(cuid())
+  username             String         @unique
+  email                String         @unique
+  passwordHash         String
+  role                 Role           @default(USER)
+  active               Boolean        @default(true)
+  createdAt            DateTime       @default(now())
+  userTasks            UserTask[]
+  approvedUserTasks    UserTask[]     @relation("TaskApprover")
+  documents            Document[]
+  userWorkflows        UserWorkflow[] @relation("WorkflowUser")
+  supervisedWorkflows  UserWorkflow[] @relation("WorkflowSupervisor")
+  assignedWorkflowsBy  UserWorkflow[] @relation("WorkflowAssigner")
 
   @@index([username])
   @@index([email])
@@ -46,31 +56,36 @@ model BrandingSetting {
 }
 
 model OnboardingTask {
-  id           String     @id @default(cuid())
-  title        String
-  description  String?
-  taskType     TaskType   @default(STANDARD)
-  assignedRole Role[]
-  order        Int        @default(0)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  userTasks    UserTask[]
+  id            String         @id @default(cuid())
+  title         String
+  description   String?
+  taskType      TaskType       @default(STANDARD)
+  order         Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  userTasks     UserTask[]
+  workflowTasks WorkflowTask[]
 }
 
 model UserTask {
-  id          String          @id @default(cuid())
-  userId      String
-  taskId      String
-  completed   Boolean         @default(false)
-  completedAt DateTime?
-  documentId  String?         @unique
-  user        User            @relation(fields: [userId], references: [id])
-  task        OnboardingTask  @relation(fields: [taskId], references: [id])
-  document    Document?       @relation(fields: [documentId], references: [id])
+  id             String          @id @default(cuid())
+  userId         String
+  taskId         String
+  completed      Boolean         @default(false)
+  completedAt    DateTime?
+  documentId     String?         @unique
+  approvalStatus ApprovalStatus  @default(PENDING)
+  approvedAt     DateTime?
+  approvedById   String?
+  user           User            @relation(fields: [userId], references: [id])
+  task           OnboardingTask  @relation(fields: [taskId], references: [id])
+  document       Document?       @relation(fields: [documentId], references: [id])
+  approvedBy     User?           @relation("TaskApprover", fields: [approvedById], references: [id])
 
   @@unique([userId, taskId])
   @@index([userId])
   @@index([taskId])
+  @@index([approvedById])
 }
 
 model Document {
@@ -85,4 +100,47 @@ model Document {
   userTask    UserTask?
 
   @@index([uploadedBy])
+}
+
+model Workflow {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  description   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  tasks         WorkflowTask[]
+  userWorkflows UserWorkflow[]
+}
+
+// Junction table: which tasks belong to which workflow, with per-workflow ordering
+model WorkflowTask {
+  id         String         @id @default(cuid())
+  workflowId String
+  taskId     String
+  order      Int            @default(0)
+  workflow   Workflow       @relation(fields: [workflowId], references: [id])
+  task       OnboardingTask @relation(fields: [taskId], references: [id])
+
+  @@unique([workflowId, taskId])
+  @@index([workflowId])
+  @@index([taskId])
+}
+
+// A user assigned to a workflow, with an optional supervisor as approver
+model UserWorkflow {
+  id           String   @id @default(cuid())
+  userId       String
+  workflowId   String
+  supervisorId String?
+  assignedAt   DateTime @default(now())
+  assignedById String
+  user         User     @relation("WorkflowUser", fields: [userId], references: [id])
+  workflow     Workflow @relation(fields: [workflowId], references: [id])
+  supervisor   User?    @relation("WorkflowSupervisor", fields: [supervisorId], references: [id])
+  assignedBy   User     @relation("WorkflowAssigner", fields: [assignedById], references: [id])
+
+  @@unique([userId, workflowId])
+  @@index([userId])
+  @@index([workflowId])
+  @@index([supervisorId])
 }

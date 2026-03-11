@@ -6,7 +6,7 @@
  *   - Rate-limit propagation (limiter throws -> 429)
  *   - Task existence (missing task -> 404)
  *   - Task type guard (STANDARD task -> 409)
- *   - Role assignment check (role not in assignedRole -> 403)
+ *   - Workflow membership check (no membership -> 403)
  *   - Missing file field (-> 400)
  *   - File validation error from saveUpload (UploadError -> 4xx pass-through)
  *   - Successful upload -> 200 with documentFilename
@@ -21,6 +21,9 @@ jest.mock('@/lib/db', () => ({
   prisma: {
     onboardingTask: {
       findUnique: jest.fn(),
+    },
+    workflowTask: {
+      findFirst: jest.fn(),
     },
     $transaction: jest.fn(),
   },
@@ -40,6 +43,9 @@ import { POST } from '@/app/api/tasks/[taskId]/upload/route'
 const mockAuth = auth as jest.MockedFunction<typeof auth>
 const mockFindUnique = prisma.onboardingTask.findUnique as jest.MockedFunction<
   typeof prisma.onboardingTask.findUnique
+>
+const mockWorkflowTaskFindFirst = prisma.workflowTask.findFirst as jest.MockedFunction<
+  typeof prisma.workflowTask.findFirst
 >
 const mockTransaction = prisma.$transaction as jest.MockedFunction<
   typeof prisma.$transaction
@@ -101,10 +107,7 @@ describe('POST /api/tasks/[taskId]/upload', () => {
 
   it('returns 409 when task is STANDARD type', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER') as never)
-    mockFindUnique.mockResolvedValueOnce({
-      taskType: 'STANDARD',
-      assignedRole: ['USER'],
-    } as never)
+    mockFindUnique.mockResolvedValueOnce({ taskType: 'STANDARD' } as never)
     const req = await makeUploadRequest(makeFile())
     const res = await POST(req, routeCtx)
     expect(res.status).toBe(409)
@@ -112,12 +115,10 @@ describe('POST /api/tasks/[taskId]/upload', () => {
     expect(data.error).toMatch(/does not require/)
   })
 
-  it('returns 403 when user role is not in task assignedRole', async () => {
+  it('returns 403 when task is not in any workflow assigned to user', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER', 'user-1') as never)
-    mockFindUnique.mockResolvedValueOnce({
-      taskType: 'UPLOAD',
-      assignedRole: ['HR'],
-    } as never)
+    mockFindUnique.mockResolvedValueOnce({ taskType: 'UPLOAD' } as never)
+    mockWorkflowTaskFindFirst.mockResolvedValueOnce(null as never)
     const req = await makeUploadRequest(makeFile())
     const res = await POST(req, routeCtx)
     expect(res.status).toBe(403)
@@ -127,10 +128,8 @@ describe('POST /api/tasks/[taskId]/upload', () => {
 
   it('returns 400 when file field is missing', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER') as never)
-    mockFindUnique.mockResolvedValueOnce({
-      taskType: 'UPLOAD',
-      assignedRole: ['USER'],
-    } as never)
+    mockFindUnique.mockResolvedValueOnce({ taskType: 'UPLOAD' } as never)
+    mockWorkflowTaskFindFirst.mockResolvedValueOnce({ id: 'wt-1' } as never)
     const req = await makeUploadRequest() // no file
     const res = await POST(req, routeCtx)
     expect(res.status).toBe(400)
@@ -140,10 +139,8 @@ describe('POST /api/tasks/[taskId]/upload', () => {
 
   it('propagates UploadError status code from saveUpload (e.g. 415 for bad MIME)', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER') as never)
-    mockFindUnique.mockResolvedValueOnce({
-      taskType: 'UPLOAD',
-      assignedRole: ['USER'],
-    } as never)
+    mockFindUnique.mockResolvedValueOnce({ taskType: 'UPLOAD' } as never)
+    mockWorkflowTaskFindFirst.mockResolvedValueOnce({ id: 'wt-1' } as never)
     mockSaveUpload.mockRejectedValueOnce(new UploadError('File type not allowed', 415))
     const req = await makeUploadRequest(makeFile('bad.exe', 'application/x-msdownload'))
     const res = await POST(req, routeCtx)
@@ -154,10 +151,8 @@ describe('POST /api/tasks/[taskId]/upload', () => {
 
   it('propagates UploadError 413 for oversized file', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER') as never)
-    mockFindUnique.mockResolvedValueOnce({
-      taskType: 'UPLOAD',
-      assignedRole: ['USER'],
-    } as never)
+    mockFindUnique.mockResolvedValueOnce({ taskType: 'UPLOAD' } as never)
+    mockWorkflowTaskFindFirst.mockResolvedValueOnce({ id: 'wt-1' } as never)
     mockSaveUpload.mockRejectedValueOnce(
       new UploadError('File exceeds maximum size of 25 MB', 413),
     )
@@ -168,10 +163,8 @@ describe('POST /api/tasks/[taskId]/upload', () => {
 
   it('returns 200 with documentFilename on successful upload', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER', 'user-1') as never)
-    mockFindUnique.mockResolvedValueOnce({
-      taskType: 'UPLOAD',
-      assignedRole: ['USER'],
-    } as never)
+    mockFindUnique.mockResolvedValueOnce({ taskType: 'UPLOAD' } as never)
+    mockWorkflowTaskFindFirst.mockResolvedValueOnce({ id: 'wt-1' } as never)
     mockSaveUpload.mockResolvedValueOnce({
       storagePath: 'uuid-file.pdf',
       filename: 'doc.pdf',
@@ -190,6 +183,7 @@ describe('POST /api/tasks/[taskId]/upload', () => {
             completed: true,
             completedAt: new Date('2026-01-01'),
             documentId: 'doc-1',
+            approvalStatus: 'PENDING',
           }),
         },
       }
@@ -206,10 +200,8 @@ describe('POST /api/tasks/[taskId]/upload', () => {
 
   it('returns 500 when transaction fails', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER') as never)
-    mockFindUnique.mockResolvedValueOnce({
-      taskType: 'UPLOAD',
-      assignedRole: ['USER'],
-    } as never)
+    mockFindUnique.mockResolvedValueOnce({ taskType: 'UPLOAD' } as never)
+    mockWorkflowTaskFindFirst.mockResolvedValueOnce({ id: 'wt-1' } as never)
     mockSaveUpload.mockResolvedValueOnce({ storagePath: 'f.pdf', filename: 'f.pdf' })
     mockTransaction.mockRejectedValueOnce(new Error('DB error'))
     const req = await makeUploadRequest(makeFile())

@@ -2,9 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { Role, TaskType } from '@prisma/client'
+import type { TaskType } from '@prisma/client'
 
-const ROLES: Role[] = ['USER', 'PAYROLL', 'HR', 'SUPERVISOR', 'ADMIN']
 const TASK_TYPES: { value: TaskType; label: string; hint: string }[] = [
   { value: 'STANDARD', label: 'Standard', hint: 'User confirms with a checkbox' },
   { value: 'UPLOAD', label: 'File Upload', hint: 'User must upload a document' },
@@ -15,7 +14,6 @@ interface Task {
   title: string
   description: string | null
   taskType: TaskType
-  assignedRole: Role[]
   order: number
 }
 
@@ -28,7 +26,6 @@ const emptyForm = {
   title: '',
   description: '',
   taskType: 'STANDARD' as TaskType,
-  assignedRole: [] as Role[],
   order: 0,
 }
 
@@ -65,19 +62,8 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin }: TaskManag
       title: task.title,
       description: task.description ?? '',
       taskType: task.taskType,
-      assignedRole: [...task.assignedRole],
       order: task.order,
     })
-  }
-
-  function toggleRoleInForm(
-    role: Role,
-    current: Role[],
-    setter: (roles: Role[]) => void,
-  ) {
-    setter(
-      current.includes(role) ? current.filter((r) => r !== role) : [...current, role],
-    )
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -92,7 +78,6 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin }: TaskManag
           title: form.title,
           description: form.description || null,
           taskType: form.taskType,
-          assignedRole: form.assignedRole,
           order: form.order,
         }),
       })
@@ -126,7 +111,6 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin }: TaskManag
           title: editForm.title,
           description: editForm.description || null,
           taskType: editForm.taskType,
-          assignedRole: editForm.assignedRole,
           order: editForm.order,
         }),
       })
@@ -207,7 +191,6 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin }: TaskManag
           onSubmit={handleCreate}
           onCancel={() => setShowCreate(false)}
           loading={loading}
-          toggleRole={(r) => toggleRoleInForm(r, form.assignedRole, (roles) => setForm((f) => ({ ...f, assignedRole: roles })))}
           submitLabel="Create Task"
         />
       )}
@@ -227,11 +210,6 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin }: TaskManag
                   onSubmit={handleEdit}
                   onCancel={() => { setEditingId(null); setEditForm(null) }}
                   loading={loading}
-                  toggleRole={(r) =>
-                    toggleRoleInForm(r, editForm.assignedRole, (roles) =>
-                      setEditForm((f) => (f ? { ...f, assignedRole: roles } : f)),
-                    )
-                  }
                   submitLabel="Save Changes"
                 />
               </div>
@@ -244,21 +222,11 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin }: TaskManag
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-medium text-gray-900">{task.title}</span>
                     <TaskTypeBadge type={task.taskType} />
+                    <span className="text-xs text-gray-400">order: {task.order}</span>
                   </div>
                   {task.description && (
-                    <p className="text-sm text-gray-500 mb-1">{task.description}</p>
+                    <p className="text-sm text-gray-500">{task.description}</p>
                   )}
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {task.assignedRole.map((r) => (
-                      <span
-                        key={r}
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                      >
-                        {r}
-                      </span>
-                    ))}
-                    <span className="text-xs text-gray-400 ml-1">order: {task.order}</span>
-                  </div>
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button
@@ -306,7 +274,6 @@ interface TaskFormProps {
   onSubmit: (e: React.FormEvent) => void
   onCancel: () => void
   loading: boolean
-  toggleRole: (role: Role) => void
   submitLabel: string
 }
 
@@ -316,7 +283,6 @@ function TaskForm({
   onSubmit,
   onCancel,
   loading,
-  toggleRole,
   submitLabel,
 }: TaskFormProps) {
   return (
@@ -377,25 +343,6 @@ function TaskForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Assigned Roles <span className="text-red-500">*</span>
-          </label>
-          <div className="space-y-1">
-            {ROLES.map((r) => (
-              <label key={r} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.assignedRole.includes(r)}
-                  onChange={() => toggleRole(r)}
-                  className="rounded border-gray-300"
-                />
-                <span className="text-sm text-gray-700">{r}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Order</label>
           <input
             type="number"
@@ -420,7 +367,7 @@ function TaskForm({
         </button>
         <button
           type="submit"
-          disabled={loading || form.assignedRole.length === 0}
+          disabled={loading}
           className="rounded-md bg-primary text-white px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
         >
           {loading ? 'Saving...' : submitLabel}

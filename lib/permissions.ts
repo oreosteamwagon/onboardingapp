@@ -42,10 +42,30 @@ export function canManageBranding(role: Role): boolean {
 }
 
 // Any authenticated user may upload a document to complete an UPLOAD-type onboarding task
-// assigned to their role. Access is governed by the task's assignedRole array, NOT by
+// assigned via their workflow. Access is governed by workflow membership, NOT by
 // canUploadDocuments (which gates general document uploads to HR+).
 export function canCompleteUploadTask(_role: Role): boolean {
   return true
+}
+
+// Admin, Payroll, and HR can approve/confirm any task regardless of workflow context.
+// This is a role-only check; supervisor scope is enforced at the route level via DB query.
+export function canApproveAny(role: Role): boolean {
+  return role === Role.ADMIN || role === Role.PAYROLL || role === Role.HR
+}
+
+// Supervisors can also approve, but only for tasks within their assigned workflow scope.
+// Callers must enforce the scope check separately.
+export function canApprove(role: Role): boolean {
+  return canApproveAny(role) || role === Role.SUPERVISOR
+}
+
+export function canManageWorkflows(role: Role): boolean {
+  return hasRole(role, Role.HR)
+}
+
+export function canAssignWorkflows(role: Role): boolean {
+  return hasRole(role, Role.HR)
 }
 
 // Returns allowed roles from a comma-separated header or session

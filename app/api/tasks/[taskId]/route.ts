@@ -6,7 +6,6 @@ import { checkTaskMgmtRateLimit } from '@/lib/ratelimit'
 import {
   validateTitle,
   validateDescription,
-  validateAssignedRole,
   validateTaskType,
   validateOrder,
 } from '@/lib/validation'
@@ -41,6 +40,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 }
 
 // PUT /api/tasks/[taskId] — update a task definition (HR+ only)
+// Tasks no longer have assignedRole; role assignment is handled via workflows.
 export async function PUT(req: NextRequest, { params }: RouteContext) {
   const session = await auth()
   if (!session?.user) {
@@ -78,16 +78,9 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { title, description, taskType, assignedRole, order } = body as Record<string, unknown>
+  const { title, description, taskType, order } = body as Record<string, unknown>
 
-  // At least one field must be provided
-  if (
-    title === undefined &&
-    description === undefined &&
-    taskType === undefined &&
-    assignedRole === undefined &&
-    order === undefined
-  ) {
+  if (title === undefined && description === undefined && taskType === undefined && order === undefined) {
     return NextResponse.json({ error: 'No fields provided to update' }, { status: 400 })
   }
 
@@ -106,11 +99,6 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     if (err) return NextResponse.json({ error: err }, { status: 400 })
   }
 
-  if (assignedRole !== undefined) {
-    const err = validateAssignedRole(assignedRole)
-    if (err) return NextResponse.json({ error: err }, { status: 400 })
-  }
-
   const task = await prisma.onboardingTask.update({
     where: { id: taskId },
     data: {
@@ -119,7 +107,6 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
         description: typeof description === 'string' ? description.trim() : null,
       }),
       ...(taskType !== undefined && { taskType: taskType as TaskType }),
-      ...(assignedRole !== undefined && { assignedRole: assignedRole as Role[] }),
       ...(order !== undefined && { order: validateOrder(order) }),
     },
   })
@@ -128,7 +115,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
 }
 
 // DELETE /api/tasks/[taskId] — delete a task definition (ADMIN only)
-// Blocked if any UserTask records reference this task to prevent loss of completion history.
+// Blocked if any UserTask records or WorkflowTask memberships reference this task.
 export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   const session = await auth()
   if (!session?.user) {
@@ -152,7 +139,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
 
   const existing = await prisma.onboardingTask.findUnique({
     where: { id: taskId },
-    select: { id: true, _count: { select: { userTasks: true } } },
+    select: { id: true, _count: { select: { userTasks: true, workflowTasks: true } } },
   })
 
   if (!existing) {
@@ -161,10 +148,14 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
 
   if (existing._count.userTasks > 0) {
     return NextResponse.json(
-      {
-        error:
-          'Cannot delete a task that has completion records. Deactivate or reassign users first.',
-      },
+      { error: 'Cannot delete a task that has completion records.' },
+      { status: 409 },
+    )
+  }
+
+  if (existing._count.workflowTasks > 0) {
+    return NextResponse.json(
+      { error: 'Cannot delete a task that belongs to a workflow. Remove it from all workflows first.' },
       { status: 409 },
     )
   }

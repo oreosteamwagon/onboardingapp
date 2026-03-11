@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 // canCompleteUploadTask allows any authenticated user; access is governed by
-// the task's assignedRole array — this is intentionally NOT canUploadDocuments
-// (which gates general document uploads to HR+).
+// workflow membership, NOT by canUploadDocuments (which gates general document uploads to HR+).
 import { canCompleteUploadTask } from '@/lib/permissions'
 import { checkUploadRateLimit } from '@/lib/ratelimit'
 import { saveUpload, UploadError } from '@/lib/upload'
@@ -45,7 +44,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   // 5. Verify task exists and is UPLOAD type
   const task = await prisma.onboardingTask.findUnique({
     where: { id: taskId },
-    select: { taskType: true, assignedRole: true },
+    select: { taskType: true },
   })
 
   if (!task) {
@@ -59,9 +58,20 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     )
   }
 
-  // 6. Object-level authorization: task must be assigned to user's role
-  if (!task.assignedRole.includes(session.user.role as Role)) {
-    return NextResponse.json({ error: 'Task not assigned to your role' }, { status: 403 })
+  // 6. Object-level authorization: task must be in a workflow assigned to this user
+  const membership = await prisma.workflowTask.findFirst({
+    where: {
+      taskId,
+      workflow: {
+        userWorkflows: {
+          some: { userId: session.user.id },
+        },
+      },
+    },
+  })
+
+  if (!membership) {
+    return NextResponse.json({ error: 'Task not assigned to you' }, { status: 403 })
   }
 
   // 7. Parse and validate the uploaded file (magic-byte validation inside saveUpload)

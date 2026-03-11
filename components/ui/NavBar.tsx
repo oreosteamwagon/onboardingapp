@@ -18,6 +18,8 @@ export default function NavBar({ user }: NavBarProps) {
   const { orgName } = useBranding()
   const isAdmin = user.role === 'ADMIN'
   const isHrOrAbove = ['HR', 'SUPERVISOR', 'ADMIN'].includes(user.role)
+  const canApprove = ['PAYROLL', 'HR', 'SUPERVISOR', 'ADMIN'].includes(user.role)
+  const canManageWorkflows = ['HR', 'ADMIN'].includes(user.role)
 
   return (
     <nav className="bg-primary text-white shadow-sm">
@@ -39,12 +41,28 @@ export default function NavBar({ user }: NavBarProps) {
             >
               Documents
             </Link>
+            {canApprove && (
+              <Link
+                href="/approvals"
+                className="text-sm hover:text-white/80 transition-colors"
+              >
+                Approvals
+              </Link>
+            )}
             {isHrOrAbove && (
               <Link
                 href="/admin/tasks"
                 className="text-sm hover:text-white/80 transition-colors"
               >
                 Tasks
+              </Link>
+            )}
+            {canManageWorkflows && (
+              <Link
+                href="/admin/workflows"
+                className="text-sm hover:text-white/80 transition-colors"
+              >
+                Workflows
               </Link>
             )}
             {isAdmin && (

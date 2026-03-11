@@ -6,7 +6,6 @@ import { checkTaskMgmtRateLimit } from '@/lib/ratelimit'
 import {
   validateTitle,
   validateDescription,
-  validateAssignedRole,
   validateTaskType,
   validateOrder,
 } from '@/lib/validation'
@@ -31,6 +30,7 @@ export async function GET() {
 }
 
 // POST /api/tasks — create a task definition (HR+ only)
+// Tasks are no longer role-assigned; they are added to workflows instead.
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { title, description, taskType, assignedRole, order } = body as Record<string, unknown>
+  const { title, description, taskType, order } = body as Record<string, unknown>
 
   const titleErr = validateTitle(title)
   if (titleErr) return NextResponse.json({ error: titleErr }, { status: 400 })
@@ -69,15 +69,11 @@ export async function POST(req: NextRequest) {
   const typeErr = validateTaskType(taskType)
   if (typeErr) return NextResponse.json({ error: typeErr }, { status: 400 })
 
-  const roleErr = validateAssignedRole(assignedRole)
-  if (roleErr) return NextResponse.json({ error: roleErr }, { status: 400 })
-
   const task = await prisma.onboardingTask.create({
     data: {
       title: (title as string).trim(),
       description: typeof description === 'string' ? description.trim() : null,
       taskType: (taskType as TaskType | undefined) ?? 'STANDARD',
-      assignedRole: assignedRole as Role[],
       order: validateOrder(order),
     },
   })
@@ -85,8 +81,9 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(task, { status: 201 })
 }
 
-// PATCH /api/tasks — mark a STANDARD task complete/incomplete for the authenticated user
-// UPLOAD tasks are completed exclusively via POST /api/tasks/[taskId]/upload
+// PATCH /api/tasks — mark a STANDARD task complete/incomplete for the authenticated user.
+// Authorization: user must have this task via a workflow assignment.
+// UPLOAD tasks are completed exclusively via POST /api/tasks/[taskId]/upload.
 export async function PATCH(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
@@ -118,10 +115,10 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  // Verify task exists, is assigned to user's role, and is STANDARD type
+  // Verify task exists and is STANDARD type
   const task = await prisma.onboardingTask.findUnique({
     where: { id: taskId },
-    select: { assignedRole: true, taskType: true },
+    select: { taskType: true },
   })
 
   if (!task) {
@@ -136,8 +133,20 @@ export async function PATCH(req: NextRequest) {
     )
   }
 
-  if (!task.assignedRole.includes(session.user.role as Role)) {
-    return NextResponse.json({ error: 'Task not assigned to your role' }, { status: 403 })
+  // Workflow membership check: user must have this task via at least one workflow assignment
+  const membership = await prisma.workflowTask.findFirst({
+    where: {
+      taskId,
+      workflow: {
+        userWorkflows: {
+          some: { userId: session.user.id },
+        },
+      },
+    },
+  })
+
+  if (!membership) {
+    return NextResponse.json({ error: 'Task not assigned to you' }, { status: 403 })
   }
 
   const userTask = await prisma.userTask.upsert({
@@ -145,6 +154,10 @@ export async function PATCH(req: NextRequest) {
     update: {
       completed,
       completedAt: completed ? new Date() : null,
+      // Un-completing resets approval status
+      approvalStatus: completed ? undefined : 'PENDING',
+      approvedAt: completed ? undefined : null,
+      approvedById: completed ? undefined : null,
     },
     create: {
       userId,

@@ -1,9 +1,9 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import type { TaskType } from '@prisma/client'
+import type { TaskType, ApprovalStatus } from '@prisma/client'
 
-interface Task {
+interface TaskItem {
   id: string
   title: string
   description: string | null
@@ -13,27 +13,41 @@ interface Task {
   completedAt: string | null
   userTaskId: string | null
   documentFilename: string | null
+  approvalStatus: ApprovalStatus
+  approvedAt: string | null
+  approvedByUsername: string | null
+}
+
+interface WorkflowGroup {
+  id: string
+  workflowId: string
+  workflowName: string
+  workflowDescription: string | null
+  supervisor: { id: string; username: string } | null
+  tasks: TaskItem[]
 }
 
 interface ChecklistViewProps {
-  tasks: Task[]
+  workflows: WorkflowGroup[]
   userId: string
   isOwnPage: boolean
-  canManage: boolean
-  viewerRole: string
 }
 
-export default function ChecklistView({
-  tasks: initial,
-  userId,
-  isOwnPage,
-}: ChecklistViewProps) {
-  const [tasks, setTasks] = useState(initial)
+export default function ChecklistView({ workflows, userId, isOwnPage }: ChecklistViewProps) {
+  const [groups, setGroups] = useState(workflows)
   const [error, setError] = useState<string | null>(null)
-  const [uploading, setUploading] = useState<string | null>(null) // taskId being uploaded
+  const [uploading, setUploading] = useState<string | null>(null)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
-  // Handle checkbox toggle for STANDARD tasks
+  function updateTask(taskId: string, patch: Partial<TaskItem>) {
+    setGroups((prev) =>
+      prev.map((g) => ({
+        ...g,
+        tasks: g.tasks.map((t) => (t.id === taskId ? { ...t, ...patch } : t)),
+      })),
+    )
+  }
+
   async function handleToggle(taskId: string, currentlyCompleted: boolean) {
     if (!isOwnPage) return
     setError(null)
@@ -42,11 +56,7 @@ export default function ChecklistView({
       const res = await fetch('/api/tasks', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          taskId,
-          completed: !currentlyCompleted,
-        }),
+        body: JSON.stringify({ userId, taskId, completed: !currentlyCompleted }),
       })
 
       const data = await res.json()
@@ -55,24 +65,19 @@ export default function ChecklistView({
         return
       }
 
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                completed: data.completed,
-                completedAt: data.completedAt ?? null,
-                userTaskId: data.id,
-              }
-            : t,
-        ),
-      )
+      updateTask(taskId, {
+        completed: data.completed,
+        completedAt: data.completedAt ?? null,
+        userTaskId: data.id,
+        approvalStatus: data.approvalStatus,
+        approvedAt: data.approvedAt ?? null,
+        approvedByUsername: null,
+      })
     } catch {
       setError('Unexpected error updating task.')
     }
   }
 
-  // Handle file selection and upload for UPLOAD tasks
   async function handleFileUpload(taskId: string, file: File) {
     if (!isOwnPage) return
     setError(null)
@@ -93,20 +98,13 @@ export default function ChecklistView({
         return
       }
 
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                completed: data.completed,
-                completedAt: data.completedAt ?? null,
-                documentFilename: data.documentFilename ?? null,
-              }
-            : t,
-        ),
-      )
+      updateTask(taskId, {
+        completed: data.completed,
+        completedAt: data.completedAt ?? null,
+        documentFilename: data.documentFilename ?? null,
+        approvalStatus: data.approvalStatus ?? 'PENDING',
+      })
 
-      // Reset the file input so the user can re-upload if needed
       const input = fileInputRefs.current[taskId]
       if (input) input.value = ''
     } catch {
@@ -116,48 +114,91 @@ export default function ChecklistView({
     }
   }
 
-  if (tasks.length === 0) {
-    return (
-      <div className="text-gray-500 text-sm">
-        No onboarding tasks assigned for this role yet.
-      </div>
-    )
-  }
-
   return (
-    <div>
+    <div className="space-y-8">
       {error && (
         <div
           role="alert"
-          className="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700"
+          className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700"
         >
           {error}
         </div>
       )}
 
-      <ul className="space-y-3">
-        {tasks.map((task) =>
-          task.taskType === 'UPLOAD' ? (
-            <UploadTaskItem
-              key={task.id}
-              task={task}
-              isOwnPage={isOwnPage}
-              isUploading={uploading === task.id}
-              onFileChange={(file) => handleFileUpload(task.id, file)}
-              inputRef={(el) => { fileInputRefs.current[task.id] = el }}
-            />
+      {groups.map((group) => (
+        <section key={group.id}>
+          <div className="mb-3">
+            <h2 className="text-lg font-semibold text-gray-800">{group.workflowName}</h2>
+            {group.workflowDescription && (
+              <p className="text-sm text-gray-500">{group.workflowDescription}</p>
+            )}
+            {group.supervisor && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                Supervisor: {group.supervisor.username}
+              </p>
+            )}
+          </div>
+
+          {group.tasks.length === 0 ? (
+            <p className="text-sm text-gray-400">No tasks in this workflow.</p>
           ) : (
-            <StandardTaskItem
-              key={task.id}
-              task={task}
-              isOwnPage={isOwnPage}
-              onToggle={() => handleToggle(task.id, task.completed)}
-            />
-          ),
-        )}
-      </ul>
+            <ul className="space-y-3">
+              {group.tasks.map((task) =>
+                task.taskType === 'UPLOAD' ? (
+                  <UploadTaskItem
+                    key={task.id}
+                    task={task}
+                    isOwnPage={isOwnPage}
+                    isUploading={uploading === task.id}
+                    onFileChange={(file) => handleFileUpload(task.id, file)}
+                    inputRef={(el) => { fileInputRefs.current[task.id] = el }}
+                  />
+                ) : (
+                  <StandardTaskItem
+                    key={task.id}
+                    task={task}
+                    isOwnPage={isOwnPage}
+                    onToggle={() => handleToggle(task.id, task.completed)}
+                  />
+                ),
+              )}
+            </ul>
+          )}
+        </section>
+      ))}
     </div>
   )
+}
+
+// ---- Approval badge ----
+
+function ApprovalBadge({ status, approvedByUsername, approvedAt }: {
+  status: ApprovalStatus
+  approvedByUsername: string | null
+  approvedAt: string | null
+}) {
+  if (status === 'APPROVED') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+        Approved
+        {approvedByUsername && <span className="font-normal opacity-75">by {approvedByUsername}</span>}
+        {approvedAt && (
+          <span className="font-normal opacity-75">
+            {' '}&mdash; {new Date(approvedAt).toLocaleDateString()}
+          </span>
+        )}
+      </span>
+    )
+  }
+  if (status === 'REJECTED') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+        Rejected
+      </span>
+    )
+  }
+  // PENDING — only show badge if task is completed (awaiting review)
+  return null
 }
 
 // ---- STANDARD task item ----
@@ -167,32 +208,48 @@ function StandardTaskItem({
   isOwnPage,
   onToggle,
 }: {
-  task: Task
+  task: TaskItem
   isOwnPage: boolean
   onToggle: () => void
 }) {
   return (
     <li
       className={`bg-white rounded-lg shadow px-6 py-4 flex items-start gap-4 ${
-        task.completed ? 'opacity-60' : ''
+        task.completed && task.approvalStatus === 'APPROVED' ? 'opacity-60' : ''
       }`}
     >
       <input
         type="checkbox"
         checked={task.completed}
         onChange={onToggle}
-        disabled={!isOwnPage}
+        disabled={!isOwnPage || task.approvalStatus === 'APPROVED'}
         className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer disabled:cursor-default"
         aria-label={`Mark "${task.title}" as ${task.completed ? 'incomplete' : 'complete'}`}
       />
       <div className="flex-1 min-w-0">
-        <p
-          className={`text-sm font-medium ${
-            task.completed ? 'line-through text-gray-400' : 'text-gray-900'
-          }`}
-        >
-          {task.title}
-        </p>
+        <div className="flex flex-wrap items-center gap-2 mb-0.5">
+          <p
+            className={`text-sm font-medium ${
+              task.completed ? 'line-through text-gray-400' : 'text-gray-900'
+            }`}
+          >
+            {task.title}
+          </p>
+          {task.completed && (
+            <>
+              {task.approvalStatus === 'PENDING' && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                  Pending review
+                </span>
+              )}
+              <ApprovalBadge
+                status={task.approvalStatus}
+                approvedByUsername={task.approvedByUsername}
+                approvedAt={task.approvedAt}
+              />
+            </>
+          )}
+        </div>
         {task.description && (
           <p className="text-sm text-gray-500 mt-0.5">{task.description}</p>
         )}
@@ -215,16 +272,18 @@ function UploadTaskItem({
   onFileChange,
   inputRef,
 }: {
-  task: Task
+  task: TaskItem
   isOwnPage: boolean
   isUploading: boolean
   onFileChange: (file: File) => void
   inputRef: (el: HTMLInputElement | null) => void
 }) {
+  const approved = task.approvalStatus === 'APPROVED'
+
   return (
     <li
       className={`bg-white rounded-lg shadow px-6 py-4 flex items-start gap-4 ${
-        task.completed ? 'opacity-70' : ''
+        approved ? 'opacity-70' : ''
       }`}
     >
       {/* Status indicator */}
@@ -259,7 +318,7 @@ function UploadTaskItem({
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
+        <div className="flex flex-wrap items-center gap-2 mb-0.5">
           <p
             className={`text-sm font-medium ${
               task.completed ? 'text-gray-400' : 'text-gray-900'
@@ -270,6 +329,18 @@ function UploadTaskItem({
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
             File required
           </span>
+          {task.completed && task.approvalStatus === 'PENDING' && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+              Pending review
+            </span>
+          )}
+          {task.completed && (
+            <ApprovalBadge
+              status={task.approvalStatus}
+              approvedByUsername={task.approvedByUsername}
+              approvedAt={task.approvedAt}
+            />
+          )}
         </div>
 
         {task.description && (
@@ -279,9 +350,7 @@ function UploadTaskItem({
         {task.completed ? (
           <div className="mt-1 text-xs text-gray-400">
             <span className="text-green-600 font-medium">Submitted</span>
-            {task.documentFilename && (
-              <span> &mdash; {task.documentFilename}</span>
-            )}
+            {task.documentFilename && <span> &mdash; {task.documentFilename}</span>}
             {task.completedAt && (
               <span> &mdash; {new Date(task.completedAt).toLocaleString()}</span>
             )}

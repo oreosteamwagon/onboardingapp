@@ -25,7 +25,7 @@ export default async function AdminTasksPage() {
     <div>
       <h1 className="text-2xl font-semibold text-gray-900 mb-2">Checklist Manager</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Define and manage onboarding tasks assigned to each role.
+        Define and manage onboarding task definitions. Assign tasks to workflows to control who receives them.
       </p>
       <TaskManager
         tasks={tasks.map((t) => ({
@@ -33,7 +33,6 @@ export default async function AdminTasksPage() {
           title: t.title,
           description: t.description,
           taskType: t.taskType,
-          assignedRole: t.assignedRole,
           order: t.order,
         }))}
         viewerIsAdmin={isAdmin(session.user.role as Role)}

@@ -7,7 +7,8 @@
  *   - Input validation (missing fields, bad types, oversized strings, invalid enums)
  *   - Object-level checks (user can only update their own UserTask)
  *   - UPLOAD task rejection via PATCH
- *   - DELETE blocked when UserTask records exist
+ *   - Workflow membership check (no membership -> 403)
+ *   - DELETE blocked when UserTask or WorkflowTask records exist
  */
 
 import { NextRequest } from 'next/server'
@@ -27,6 +28,9 @@ jest.mock('@/lib/db', () => ({
     userTask: {
       findUnique: jest.fn(),
       upsert: jest.fn(),
+    },
+    workflowTask: {
+      findFirst: jest.fn(),
     },
   },
 }))
@@ -63,6 +67,9 @@ const mockDelete = prisma.onboardingTask.delete as jest.MockedFunction<
 const mockUpsert = prisma.userTask.upsert as jest.MockedFunction<
   typeof prisma.userTask.upsert
 >
+const mockWorkflowTaskFindFirst = prisma.workflowTask.findFirst as jest.MockedFunction<
+  typeof prisma.workflowTask.findFirst
+>
 
 // ---- Helpers ----
 
@@ -93,7 +100,6 @@ const sampleTask = {
   title: 'Sign NDA',
   description: null,
   taskType: 'STANDARD' as const,
-  assignedRole: ['USER'],
   order: 0,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -158,9 +164,7 @@ describe('POST /api/tasks', () => {
 
   it('returns 400 when title is missing', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
-    const res = await POST(
-      makeRequest({ description: 'desc', assignedRole: ['USER'], taskType: 'STANDARD' }),
-    )
+    const res = await POST(makeRequest({ description: 'desc', taskType: 'STANDARD' }))
     expect(res.status).toBe(400)
     const data = await res.json()
     expect(data.error).toMatch(/title/)
@@ -168,13 +172,7 @@ describe('POST /api/tasks', () => {
 
   it('returns 400 when title exceeds 256 characters', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
-    const res = await POST(
-      makeRequest({
-        title: 'a'.repeat(257),
-        assignedRole: ['USER'],
-        taskType: 'STANDARD',
-      }),
-    )
+    const res = await POST(makeRequest({ title: 'a'.repeat(257), taskType: 'STANDARD' }))
     expect(res.status).toBe(400)
     const data = await res.json()
     expect(data.error).toMatch(/title/)
@@ -183,12 +181,7 @@ describe('POST /api/tasks', () => {
   it('returns 400 when description exceeds 2000 characters', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
     const res = await POST(
-      makeRequest({
-        title: 'Valid',
-        description: 'x'.repeat(2001),
-        assignedRole: ['USER'],
-        taskType: 'STANDARD',
-      }),
+      makeRequest({ title: 'Valid', description: 'x'.repeat(2001), taskType: 'STANDARD' }),
     )
     expect(res.status).toBe(400)
     const data = await res.json()
@@ -197,60 +190,16 @@ describe('POST /api/tasks', () => {
 
   it('returns 400 when taskType is invalid', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
-    const res = await POST(
-      makeRequest({
-        title: 'Valid',
-        assignedRole: ['USER'],
-        taskType: 'INVALID_TYPE',
-      }),
-    )
+    const res = await POST(makeRequest({ title: 'Valid', taskType: 'INVALID_TYPE' }))
     expect(res.status).toBe(400)
     const data = await res.json()
     expect(data.error).toMatch(/taskType/)
   })
 
-  it('returns 400 when assignedRole is empty', async () => {
-    mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
-    const res = await POST(
-      makeRequest({ title: 'Valid', assignedRole: [], taskType: 'STANDARD' }),
-    )
-    expect(res.status).toBe(400)
-    const data = await res.json()
-    expect(data.error).toMatch(/assignedRole/)
-  })
-
-  it('returns 400 when assignedRole contains an invalid value', async () => {
-    mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
-    const res = await POST(
-      makeRequest({
-        title: 'Valid',
-        assignedRole: ['NOTAROLE'],
-        taskType: 'STANDARD',
-      }),
-    )
-    expect(res.status).toBe(400)
-    const data = await res.json()
-    expect(data.error).toMatch(/Invalid role/)
-  })
-
-  it('returns 400 when assignedRole is not an array', async () => {
-    mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
-    const res = await POST(
-      makeRequest({ title: 'Valid', assignedRole: 'USER', taskType: 'STANDARD' }),
-    )
-    expect(res.status).toBe(400)
-  })
-
   it('creates a STANDARD task and returns 201', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
     mockCreate.mockResolvedValueOnce(sampleTask as never)
-    const res = await POST(
-      makeRequest({
-        title: 'Sign NDA',
-        assignedRole: ['USER'],
-        taskType: 'STANDARD',
-      }),
-    )
+    const res = await POST(makeRequest({ title: 'Sign NDA', taskType: 'STANDARD' }))
     expect(res.status).toBe(201)
   })
 
@@ -258,13 +207,7 @@ describe('POST /api/tasks', () => {
     mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
     const uploadTask = { ...sampleTask, taskType: 'UPLOAD' as const }
     mockCreate.mockResolvedValueOnce(uploadTask as never)
-    const res = await POST(
-      makeRequest({
-        title: 'Upload ID',
-        assignedRole: ['USER'],
-        taskType: 'UPLOAD',
-      }),
-    )
+    const res = await POST(makeRequest({ title: 'Upload ID', taskType: 'UPLOAD' }))
     expect(res.status).toBe(201)
   })
 
@@ -316,10 +259,7 @@ describe('PATCH /api/tasks', () => {
 
   it('returns 409 when task is UPLOAD type — checkbox toggle is forbidden', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER', 'user-1') as never)
-    mockFindUnique.mockResolvedValueOnce({
-      assignedRole: ['USER'],
-      taskType: 'UPLOAD',
-    } as never)
+    mockFindUnique.mockResolvedValueOnce({ taskType: 'UPLOAD' } as never)
     const res = await PATCH(
       makeRequest({ userId: 'user-1', taskId: 'task-1', completed: true }, 'PATCH'),
     )
@@ -330,34 +270,29 @@ describe('PATCH /api/tasks', () => {
 
   it('returns 409 for UPLOAD task even when trying to mark incomplete via PATCH', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER', 'user-1') as never)
-    mockFindUnique.mockResolvedValueOnce({
-      assignedRole: ['USER'],
-      taskType: 'UPLOAD',
-    } as never)
+    mockFindUnique.mockResolvedValueOnce({ taskType: 'UPLOAD' } as never)
     const res = await PATCH(
       makeRequest({ userId: 'user-1', taskId: 'task-1', completed: false }, 'PATCH'),
     )
     expect(res.status).toBe(409)
   })
 
-  it('returns 403 when task is not assigned to user role', async () => {
+  it('returns 403 when task is not in any workflow assigned to user', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER', 'user-1') as never)
-    mockFindUnique.mockResolvedValueOnce({
-      assignedRole: ['HR'],
-      taskType: 'STANDARD',
-    } as never)
+    mockFindUnique.mockResolvedValueOnce({ taskType: 'STANDARD' } as never)
+    mockWorkflowTaskFindFirst.mockResolvedValueOnce(null as never)
     const res = await PATCH(
       makeRequest({ userId: 'user-1', taskId: 'task-1', completed: true }, 'PATCH'),
     )
     expect(res.status).toBe(403)
+    const data = await res.json()
+    expect(data.error).toMatch(/not assigned/)
   })
 
   it('upserts UserTask and returns 200 for a valid STANDARD toggle', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER', 'user-1') as never)
-    mockFindUnique.mockResolvedValueOnce({
-      assignedRole: ['USER'],
-      taskType: 'STANDARD',
-    } as never)
+    mockFindUnique.mockResolvedValueOnce({ taskType: 'STANDARD' } as never)
+    mockWorkflowTaskFindFirst.mockResolvedValueOnce({ id: 'wt-1' } as never)
     mockUpsert.mockResolvedValueOnce({
       id: 'ut-1',
       userId: 'user-1',
@@ -365,6 +300,9 @@ describe('PATCH /api/tasks', () => {
       completed: true,
       completedAt: new Date(),
       documentId: null,
+      approvalStatus: 'PENDING',
+      approvedAt: null,
+      approvedById: null,
     } as never)
     const res = await PATCH(
       makeRequest({ userId: 'user-1', taskId: 'task-1', completed: true }, 'PATCH'),
@@ -452,25 +390,10 @@ describe('PUT /api/tasks/[taskId]', () => {
   it('returns 400 when taskType is invalid', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
     mockFindUnique.mockResolvedValueOnce(sampleTask as never)
-    const res = await putTask(
-      makeTaskRouteRequest({ taskType: 'BOGUS' }),
-      taskRouteCtx,
-    )
+    const res = await putTask(makeTaskRouteRequest({ taskType: 'BOGUS' }), taskRouteCtx)
     expect(res.status).toBe(400)
     const data = await res.json()
     expect(data.error).toMatch(/taskType/)
-  })
-
-  it('returns 400 when assignedRole contains invalid value', async () => {
-    mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
-    mockFindUnique.mockResolvedValueOnce(sampleTask as never)
-    const res = await putTask(
-      makeTaskRouteRequest({ assignedRole: ['GHOST'] }),
-      taskRouteCtx,
-    )
-    expect(res.status).toBe(400)
-    const data = await res.json()
-    expect(data.error).toMatch(/Invalid role/)
   })
 
   it('updates and returns 200 for valid payload', async () => {
@@ -478,10 +401,7 @@ describe('PUT /api/tasks/[taskId]', () => {
     mockFindUnique.mockResolvedValueOnce(sampleTask as never)
     const updated = { ...sampleTask, title: 'Updated' }
     mockUpdate.mockResolvedValueOnce(updated as never)
-    const res = await putTask(
-      makeTaskRouteRequest({ title: 'Updated' }),
-      taskRouteCtx,
-    )
+    const res = await putTask(makeTaskRouteRequest({ title: 'Updated' }), taskRouteCtx)
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data.title).toBe('Updated')
@@ -522,7 +442,7 @@ describe('DELETE /api/tasks/[taskId]', () => {
     mockAuth.mockResolvedValueOnce(makeSession('ADMIN') as never)
     mockFindUnique.mockResolvedValueOnce({
       id: 'task-1',
-      _count: { userTasks: 3 },
+      _count: { userTasks: 3, workflowTasks: 0 },
     } as never)
     const res = await deleteTask(makeTaskRouteRequest(undefined, 'DELETE'), taskRouteCtx)
     expect(res.status).toBe(409)
@@ -530,11 +450,23 @@ describe('DELETE /api/tasks/[taskId]', () => {
     expect(data.error).toMatch(/completion records/)
   })
 
-  it('deletes and returns 200 when task has no completion records', async () => {
+  it('returns 409 when task belongs to a workflow', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('ADMIN') as never)
     mockFindUnique.mockResolvedValueOnce({
       id: 'task-1',
-      _count: { userTasks: 0 },
+      _count: { userTasks: 0, workflowTasks: 2 },
+    } as never)
+    const res = await deleteTask(makeTaskRouteRequest(undefined, 'DELETE'), taskRouteCtx)
+    expect(res.status).toBe(409)
+    const data = await res.json()
+    expect(data.error).toMatch(/workflow/)
+  })
+
+  it('deletes and returns 200 when task has no completion records or workflow memberships', async () => {
+    mockAuth.mockResolvedValueOnce(makeSession('ADMIN') as never)
+    mockFindUnique.mockResolvedValueOnce({
+      id: 'task-1',
+      _count: { userTasks: 0, workflowTasks: 0 },
     } as never)
     mockDelete.mockResolvedValueOnce(sampleTask as never)
     const res = await deleteTask(makeTaskRouteRequest(undefined, 'DELETE'), taskRouteCtx)
@@ -551,9 +483,10 @@ describe('DELETE /api/tasks/[taskId]', () => {
 import {
   validateTitle,
   validateDescription,
-  validateAssignedRole,
   validateTaskType,
   validateOrder,
+  validateApprovalAction,
+  validateWorkflowName,
 } from '@/lib/validation'
 
 describe('validateTitle', () => {
@@ -576,16 +509,6 @@ describe('validateDescription', () => {
   it('rejects non-string', () => expect(validateDescription(42)).not.toBeNull())
 })
 
-describe('validateAssignedRole', () => {
-  it('rejects empty array', () => expect(validateAssignedRole([])).not.toBeNull())
-  it('rejects non-array', () => expect(validateAssignedRole('USER')).not.toBeNull())
-  it('rejects array with invalid role', () =>
-    expect(validateAssignedRole(['GHOST'])).not.toBeNull())
-  it('accepts valid single role', () => expect(validateAssignedRole(['USER'])).toBeNull())
-  it('accepts all valid roles', () =>
-    expect(validateAssignedRole(['USER', 'HR', 'ADMIN'])).toBeNull())
-})
-
 describe('validateTaskType', () => {
   it('accepts STANDARD', () => expect(validateTaskType('STANDARD')).toBeNull())
   it('accepts UPLOAD', () => expect(validateTaskType('UPLOAD')).toBeNull())
@@ -601,4 +524,20 @@ describe('validateOrder', () => {
   it('returns floor for float', () => expect(validateOrder(3.9)).toBe(3))
   it('returns 0 for NaN', () => expect(validateOrder(NaN)).toBe(0))
   it('returns value for valid integer', () => expect(validateOrder(10)).toBe(10))
+})
+
+describe('validateApprovalAction', () => {
+  it('accepts APPROVED', () => expect(validateApprovalAction('APPROVED')).toBeNull())
+  it('accepts REJECTED', () => expect(validateApprovalAction('REJECTED')).toBeNull())
+  it('rejects PENDING', () => expect(validateApprovalAction('PENDING')).not.toBeNull())
+  it('rejects empty string', () => expect(validateApprovalAction('')).not.toBeNull())
+  it('rejects undefined', () => expect(validateApprovalAction(undefined)).not.toBeNull())
+})
+
+describe('validateWorkflowName', () => {
+  it('accepts valid name', () => expect(validateWorkflowName('Eng Onboarding')).toBeNull())
+  it('rejects empty string', () => expect(validateWorkflowName('')).not.toBeNull())
+  it('rejects 129-char name', () => expect(validateWorkflowName('a'.repeat(129))).not.toBeNull())
+  it('accepts exactly 128 chars', () => expect(validateWorkflowName('a'.repeat(128))).toBeNull())
+  it('rejects non-string', () => expect(validateWorkflowName(42)).not.toBeNull())
 })

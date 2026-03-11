@@ -31,7 +31,7 @@ export async function GET() {
         user: { select: { id: true, username: true } },
         document: { select: { id: true, filename: true } },
       },
-      orderBy: { updatedAt: 'asc' },
+      orderBy: { completedAt: 'asc' },
     })
     return NextResponse.json(tasks)
   }
@@ -72,7 +72,7 @@ export async function GET() {
       user: { select: { id: true, username: true } },
       document: { select: { id: true, filename: true } },
     },
-    orderBy: { updatedAt: 'asc' },
+    orderBy: { completedAt: 'asc' },
   })
 
   return NextResponse.json(tasks)

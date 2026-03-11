@@ -46,7 +46,7 @@ export default async function ApprovalsPage() {
       user: { select: { id: true, username: true } },
       document: { select: { id: true, filename: true } },
     },
-    orderBy: { updatedAt: 'asc' },
+    orderBy: { completedAt: 'asc' },
   })
 
   return (

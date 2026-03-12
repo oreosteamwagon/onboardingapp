@@ -65,10 +65,10 @@ export async function GET() {
   }
 
   // Batch-fetch all relevant UserTasks in a single query to avoid N+1
-  const userIds = [...new Set(assignments.map((a) => a.userId))]
-  const allTaskIds = [
-    ...new Set(assignments.flatMap((a) => a.workflow.tasks.map((t) => t.taskId))),
-  ]
+  const userIds = Array.from(new Set(assignments.map((a) => a.userId)))
+  const allTaskIds = Array.from(
+    new Set(assignments.flatMap((a) => a.workflow.tasks.map((t) => t.taskId))),
+  )
 
   const userTasks = await prisma.userTask.findMany({
     where: { userId: { in: userIds }, taskId: { in: allTaskIds } },

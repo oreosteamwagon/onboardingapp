@@ -35,6 +35,13 @@ const approvalLimiter = new RateLimiterMemory({
   blockDuration: 60,
 })
 
+// 60 team-task reads per minute per authenticated user (SUPERVISOR+)
+const teamTasksLimiter = new RateLimiterMemory({
+  points: 60,
+  duration: 60,
+  blockDuration: 60,
+})
+
 export async function checkLoginRateLimit(ip: string): Promise<void> {
   await loginLimiter.consume(ip)
 }
@@ -53,4 +60,8 @@ export async function checkWorkflowMgmtRateLimit(userId: string): Promise<void> 
 
 export async function checkApprovalRateLimit(userId: string): Promise<void> {
   await approvalLimiter.consume(userId)
+}
+
+export async function checkTeamTasksRateLimit(userId: string): Promise<void> {
+  await teamTasksLimiter.consume(userId)
 }

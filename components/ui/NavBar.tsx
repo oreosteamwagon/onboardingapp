@@ -20,6 +20,8 @@ export default function NavBar({ user }: NavBarProps) {
   const isHrOrAbove = ['HR', 'SUPERVISOR', 'ADMIN'].includes(user.role)
   const canApprove = ['PAYROLL', 'HR', 'SUPERVISOR', 'ADMIN'].includes(user.role)
   const canManageWorkflows = ['HR', 'ADMIN'].includes(user.role)
+  // PAYROLL+ see "Team Tasks" (their team's progress) instead of their own checklist
+  const showTeamTasks = canApprove
 
   return (
     <nav className="bg-primary text-white shadow-sm">
@@ -29,12 +31,21 @@ export default function NavBar({ user }: NavBarProps) {
             <Link href="/dashboard" className="font-semibold text-lg">
               {orgName}
             </Link>
-            <Link
-              href={`/onboarding/${user.id}`}
-              className="text-sm hover:text-white/80 transition-colors"
-            >
-              My Tasks
-            </Link>
+            {showTeamTasks ? (
+              <Link
+                href="/team-tasks"
+                className="text-sm hover:text-white/80 transition-colors"
+              >
+                Team Tasks
+              </Link>
+            ) : (
+              <Link
+                href={`/onboarding/${user.id}`}
+                className="text-sm hover:text-white/80 transition-colors"
+              >
+                My Tasks
+              </Link>
+            )}
             <Link
               href="/documents"
               className="text-sm hover:text-white/80 transition-colors"

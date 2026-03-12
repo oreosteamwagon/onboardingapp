@@ -16,7 +16,7 @@ import { NextRequest } from 'next/server'
 
 // ---- Module mocks ----
 
-jest.mock('@/lib/auth')
+jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
     onboardingTask: {
@@ -32,7 +32,16 @@ jest.mock('@/lib/ratelimit', () => ({
   checkTaskMgmtRateLimit: jest.fn().mockResolvedValue(undefined),
   checkUploadRateLimit: jest.fn().mockResolvedValue(undefined),
 }))
-jest.mock('@/lib/upload')
+jest.mock('@/lib/upload', () => ({
+  saveUpload: jest.fn(),
+  UploadError: class UploadError extends Error {
+    statusCode: number
+    constructor(message: string, statusCode: number) {
+      super(message)
+      this.statusCode = statusCode
+    }
+  },
+}))
 
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'

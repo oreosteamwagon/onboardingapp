@@ -14,8 +14,11 @@
 import { NextRequest } from 'next/server'
 
 // ---- Module mocks ----
+// Explicit factories are required so Jest never loads the real modules.
+// Without factories, Jest automocks by importing the real file, which
+// pulls in next-auth (ESM-only) and crashes the test runner.
 
-jest.mock('@/lib/auth')
+jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
     userWorkflow: { findMany: jest.fn() },

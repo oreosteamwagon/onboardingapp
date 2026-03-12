@@ -15,7 +15,7 @@ import { NextRequest } from 'next/server'
 
 // ---- Module mocks ----
 
-jest.mock('@/lib/auth')
+jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
     onboardingTask: {

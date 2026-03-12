@@ -82,7 +82,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   // RFC 5987 encoded filename for Content-Disposition
   const encodedFilename = encodeURIComponent(document.filename)
 
-  return new NextResponse(buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     status: 200,
     headers: {
       'Content-Type': contentType,

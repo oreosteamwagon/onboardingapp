@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { canUploadDocuments } from '@/lib/permissions'
+import { canUploadDocuments, canViewAllDocuments } from '@/lib/permissions'
 import { saveUpload, UploadError } from '@/lib/upload'
 import type { Role } from '@prisma/client'
 
@@ -13,7 +13,13 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const role = session.user.role as Role
+  const visibilityFilter = canViewAllDocuments(role)
+    ? {}
+    : { uploadedBy: session.user.id }
+
   const documents = await prisma.document.findMany({
+    where: visibilityFilter,
     orderBy: { uploadedAt: 'desc' },
     include: {
       uploader: { select: { username: true } },

@@ -132,7 +132,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         },
       })
 
-      return { userTask, documentFilename: doc.filename }
+      return { userTask, documentId: doc.id, documentFilename: doc.filename }
     })
 
     return NextResponse.json(
@@ -140,6 +140,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         id: result.userTask.id,
         completed: result.userTask.completed,
         completedAt: result.userTask.completedAt,
+        documentId: result.documentId,
         documentFilename: result.documentFilename,
       },
       { status: 200 },

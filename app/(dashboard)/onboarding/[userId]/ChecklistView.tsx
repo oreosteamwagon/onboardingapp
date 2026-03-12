@@ -12,6 +12,7 @@ interface TaskItem {
   completed: boolean
   completedAt: string | null
   userTaskId: string | null
+  documentId: string | null
   documentFilename: string | null
   approvalStatus: ApprovalStatus
   approvedAt: string | null
@@ -101,6 +102,7 @@ export default function ChecklistView({ workflows, userId, isOwnPage }: Checklis
       updateTask(taskId, {
         completed: data.completed,
         completedAt: data.completedAt ?? null,
+        documentId: data.documentId ?? null,
         documentFilename: data.documentFilename ?? null,
         approvalStatus: data.approvalStatus ?? 'PENDING',
       })
@@ -350,7 +352,21 @@ function UploadTaskItem({
         {task.completed ? (
           <div className="mt-1 text-xs text-gray-400">
             <span className="text-green-600 font-medium">Submitted</span>
-            {task.documentFilename && <span> &mdash; {task.documentFilename}</span>}
+            {task.documentId && task.documentFilename ? (
+              <span>
+                {' '}&mdash;{' '}
+                <a
+                  href={`/api/documents/${task.documentId}/download`}
+                  className="text-primary hover:underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {task.documentFilename}
+                </a>
+              </span>
+            ) : task.documentFilename ? (
+              <span> &mdash; {task.documentFilename}</span>
+            ) : null}
             {task.completedAt && (
               <span> &mdash; {new Date(task.completedAt).toLocaleString()}</span>
             )}

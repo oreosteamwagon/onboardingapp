@@ -66,6 +66,17 @@ export async function checkTeamTasksRateLimit(userId: string): Promise<void> {
   await teamTasksLimiter.consume(userId)
 }
 
+// 60 document downloads per minute per authenticated user
+const documentDownloadLimiter = new RateLimiterMemory({
+  points: 60,
+  duration: 60,
+  blockDuration: 60,
+})
+
+export async function checkDocumentDownloadRateLimit(userId: string): Promise<void> {
+  await documentDownloadLimiter.consume(userId)
+}
+
 // 10 password resets per hour per admin — tighter limit for a high-privilege operation
 const passwordResetLimiter = new RateLimiterMemory({
   points: 10,

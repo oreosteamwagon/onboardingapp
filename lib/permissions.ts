@@ -68,6 +68,18 @@ export function canAssignWorkflows(role: Role): boolean {
   return hasRole(role, Role.HR)
 }
 
+// PAYROLL, HR, and ADMIN can see all documents in the documents library.
+// USER and SUPERVISOR see only documents they uploaded themselves.
+export function canViewAllDocuments(role: Role): boolean {
+  return canApproveAny(role)
+}
+
+// Any approver role (SUPERVISOR+) may download a document for review purposes.
+// The caller must also check whether the requester is the uploader.
+export function canDownloadDocument(role: Role): boolean {
+  return canApprove(role)
+}
+
 // Returns allowed roles from a comma-separated header or session
 export function assertRole(
   userRole: Role | undefined | null,

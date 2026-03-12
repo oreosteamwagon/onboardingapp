@@ -11,6 +11,7 @@ interface ApprovalItem {
   taskTitle: string
   taskType: TaskType
   completedAt: string | null
+  documentId: string | null
   documentFilename: string | null
 }
 
@@ -104,9 +105,17 @@ export default function ApprovalQueue({ items: initial }: ApprovalQueueProps) {
                     Completed {new Date(item.completedAt).toLocaleString()}
                   </p>
                 )}
-                {item.documentFilename && (
+                {item.documentId && item.documentFilename && (
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Document: {item.documentFilename}
+                    Document:{' '}
+                    <a
+                      href={`/api/documents/${item.documentId}/download`}
+                      className="text-primary hover:underline"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {item.documentFilename}
+                    </a>
                   </p>
                 )}
                 {err && (

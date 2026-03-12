@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { redirect } from 'next/navigation'
-import { canUploadDocuments } from '@/lib/permissions'
+import { canUploadDocuments, canViewAllDocuments } from '@/lib/permissions'
 import type { Role } from '@prisma/client'
 import DocumentsView from './DocumentsView'
 
@@ -9,9 +9,15 @@ export default async function DocumentsPage() {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
-  const canUpload = canUploadDocuments(session.user.role as Role)
+  const role = session.user.role as Role
+  const canUpload = canUploadDocuments(role)
+
+  const visibilityFilter = canViewAllDocuments(role)
+    ? {}
+    : { uploadedBy: session.user.id }
 
   const documents = await prisma.document.findMany({
+    where: visibilityFilter,
     orderBy: { uploadedAt: 'desc' },
     include: {
       uploader: { select: { username: true } },

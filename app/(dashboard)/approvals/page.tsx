@@ -65,6 +65,7 @@ export default async function ApprovalsPage() {
           taskTitle: ut.task.title,
           taskType: ut.task.taskType,
           completedAt: ut.completedAt?.toISOString() ?? null,
+          documentId: ut.document?.id ?? null,
           documentFilename: ut.document?.filename ?? null,
         }))}
       />

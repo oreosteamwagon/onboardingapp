@@ -76,7 +76,7 @@ export default async function OnboardingPage({ params }: PageProps) {
   const userTaskRecords = await prisma.userTask.findMany({
     where: { userId: viewingUserId },
     include: {
-      document: { select: { filename: true } },
+      document: { select: { id: true, filename: true } },
       approvedBy: { select: { id: true, username: true } },
     },
   })
@@ -101,6 +101,7 @@ export default async function OnboardingPage({ params }: PageProps) {
         completed: ut?.completed ?? false,
         completedAt: ut?.completedAt?.toISOString() ?? null,
         userTaskId: ut?.id ?? null,
+        documentId: ut?.document?.id ?? null,
         documentFilename: ut?.document?.filename ?? null,
         approvalStatus: ut?.approvalStatus ?? 'PENDING',
         approvedAt: ut?.approvedAt?.toISOString() ?? null,

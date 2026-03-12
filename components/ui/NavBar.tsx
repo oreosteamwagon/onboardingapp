@@ -90,6 +90,12 @@ export default function NavBar({ user }: NavBarProps) {
                 >
                   Branding
                 </Link>
+                <Link
+                  href="/admin/reset"
+                  className="text-sm text-red-300 hover:text-red-100 transition-colors"
+                >
+                  Reset
+                </Link>
               </>
             )}
           </div>

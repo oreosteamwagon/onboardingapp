@@ -1,0 +1,114 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/db'
+import { canManageUsers } from '@/lib/permissions'
+import { checkFactoryResetRateLimit } from '@/lib/ratelimit'
+import { unlink } from 'fs/promises'
+import { join } from 'path'
+import type { Role } from '@prisma/client'
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR ?? '/app/uploads'
+
+// The confirmation token the client must send to execute a reset.
+// Having a required body token prevents accidental invocation (browser prefetch,
+// replayed requests without a body, etc.) while keeping the endpoint simple.
+const CONFIRM_TOKEN = 'FACTORY_RESET'
+
+// POST /api/admin/factory-reset
+// ADMIN only. Deletes all non-admin users, all tasks, workflows, and documents.
+// The caller must send { confirm: "FACTORY_RESET" } in the request body.
+// All DB deletions occur in a single transaction; physical files are removed
+// after the transaction commits.
+export async function POST(req: NextRequest) {
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!canManageUsers(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  try {
+    await checkFactoryResetRateLimit(session.user.id)
+  } catch {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    (body as Record<string, unknown>).confirm !== CONFIRM_TOKEN
+  ) {
+    return NextResponse.json(
+      { error: 'Missing or invalid confirm token' },
+      { status: 400 },
+    )
+  }
+
+  // Collect storagePaths before deleting so we can clean up disk after commit.
+  // This must be outside the transaction to avoid holding it open during I/O.
+  const docs = await prisma.document.findMany({
+    select: { storagePath: true },
+  })
+  const storagePaths = docs.map((d) => d.storagePath)
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Delete in FK dependency order: dependents first, then parents.
+      // 1. UserTask references User, OnboardingTask, Document
+      await tx.userTask.deleteMany({})
+      // 2. UserWorkflow references User, Workflow
+      await tx.userWorkflow.deleteMany({})
+      // 3. WorkflowTask references Workflow, OnboardingTask
+      await tx.workflowTask.deleteMany({})
+      // 4. Document references User (UserTask FK already removed above)
+      await tx.document.deleteMany({})
+      // 5. OnboardingTask (userTasks and workflowTasks cleared above)
+      await tx.onboardingTask.deleteMany({})
+      // 6. Workflow (workflowTasks and userWorkflows cleared above)
+      await tx.workflow.deleteMany({})
+      // 7. Non-admin users (all referencing records cleared above)
+      await tx.user.deleteMany({ where: { role: { not: 'ADMIN' } } })
+    })
+  } catch (err) {
+    console.error('Factory reset transaction failed:', err)
+    return NextResponse.json({ error: 'Reset failed — no data was changed' }, { status: 500 })
+  }
+
+  // Transaction committed. Remove physical files; log failures but do not
+  // surface them to the client — the DB is already clean.
+  let filesDeleted = 0
+  let fileErrors = 0
+  for (const storagePath of storagePaths) {
+    // Defense-in-depth: skip any path with separators (should never happen)
+    if (storagePath.includes('/') || storagePath.includes('\\') || storagePath.includes('..')) {
+      console.error('Skipped suspicious storagePath during factory reset:', storagePath)
+      fileErrors++
+      continue
+    }
+    try {
+      await unlink(join(UPLOAD_DIR, storagePath))
+      filesDeleted++
+    } catch (err) {
+      console.error('Failed to delete file during factory reset:', storagePath, err)
+      fileErrors++
+    }
+  }
+
+  return NextResponse.json(
+    {
+      message: 'Factory reset complete',
+      filesDeleted,
+      fileErrors,
+    },
+    { status: 200 },
+  )
+}

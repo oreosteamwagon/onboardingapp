@@ -77,6 +77,17 @@ export async function checkDocumentDownloadRateLimit(userId: string): Promise<vo
   await documentDownloadLimiter.consume(userId)
 }
 
+// 3 factory resets per hour per admin — extreme caution for a destructive operation
+const factoryResetLimiter = new RateLimiterMemory({
+  points: 3,
+  duration: 60 * 60,
+  blockDuration: 60 * 60,
+})
+
+export async function checkFactoryResetRateLimit(userId: string): Promise<void> {
+  await factoryResetLimiter.consume(userId)
+}
+
 // 10 password resets per hour per admin — tighter limit for a high-privilege operation
 const passwordResetLimiter = new RateLimiterMemory({
   points: 10,

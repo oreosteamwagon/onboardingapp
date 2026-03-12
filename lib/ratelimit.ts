@@ -65,3 +65,14 @@ export async function checkApprovalRateLimit(userId: string): Promise<void> {
 export async function checkTeamTasksRateLimit(userId: string): Promise<void> {
   await teamTasksLimiter.consume(userId)
 }
+
+// 10 password resets per hour per admin — tighter limit for a high-privilege operation
+const passwordResetLimiter = new RateLimiterMemory({
+  points: 10,
+  duration: 60 * 60,
+  blockDuration: 60 * 60,
+})
+
+export async function checkPasswordResetRateLimit(userId: string): Promise<void> {
+  await passwordResetLimiter.consume(userId)
+}

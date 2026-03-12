@@ -24,6 +24,12 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
   const [tempPassword, setTempPassword] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // Password reset state
+  const [resetUserId, setResetUserId] = useState<string | null>(null)
+  const [resetTempPassword, setResetTempPassword] = useState<string | null>(null)
+  const [resetError, setResetError] = useState<string | null>(null)
+  const [resetLoading, setResetLoading] = useState(false)
+
   // Create user form state
   const [newUsername, setNewUsername] = useState('')
   const [newEmail, setNewEmail] = useState('')
@@ -75,6 +81,30 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
     }
   }
 
+  async function handleResetPassword(userId: string) {
+    setResetError(null)
+    setResetTempPassword(null)
+    setResetLoading(true)
+    try {
+      const res = await fetch(`/api/users/${encodeURIComponent(userId)}/reset-password`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setResetError(data.error ?? 'Failed to reset password')
+        setResetUserId(null)
+        return
+      }
+      setResetTempPassword(data.tempPassword)
+      setResetUserId(null)
+    } catch {
+      setResetError('Unexpected error resetting password.')
+      setResetUserId(null)
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
   async function handleRoleChange(userId: string, role: Role) {
     setError(null)
     try {
@@ -109,6 +139,31 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
           <button
             onClick={() => setTempPassword(null)}
             className="ml-4 text-green-600 underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {resetTempPassword && (
+        <div role="alert" className="mb-4 rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+          <strong>Password reset.</strong> New temporary password (shown once):{' '}
+          <code className="font-mono bg-blue-100 px-1 rounded">{resetTempPassword}</code>
+          <button
+            onClick={() => setResetTempPassword(null)}
+            className="ml-4 text-blue-600 underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {resetError && (
+        <div role="alert" className="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          {resetError}
+          <button
+            onClick={() => setResetError(null)}
+            className="ml-4 text-red-600 underline"
           >
             Dismiss
           </button>
@@ -229,12 +284,40 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
                   {new Date(u.createdAt).toLocaleDateString()}
                 </td>
                 <td className="px-6 py-4 text-sm">
-                  <button
-                    onClick={() => handleToggleActive(u.id, u.active)}
-                    className="text-primary hover:underline"
-                  >
-                    {u.active ? 'Deactivate' : 'Reactivate'}
-                  </button>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => handleToggleActive(u.id, u.active)}
+                      className="text-primary hover:underline"
+                    >
+                      {u.active ? 'Deactivate' : 'Reactivate'}
+                    </button>
+                    {u.active && resetUserId !== u.id && (
+                      <button
+                        onClick={() => { setResetUserId(u.id); setResetError(null) }}
+                        className="text-amber-600 hover:underline"
+                      >
+                        Reset Password
+                      </button>
+                    )}
+                    {u.active && resetUserId === u.id && (
+                      <span className="inline-flex items-center gap-2 text-amber-700">
+                        <span>Confirm reset?</span>
+                        <button
+                          onClick={() => handleResetPassword(u.id)}
+                          disabled={resetLoading}
+                          className="font-medium underline disabled:opacity-50"
+                        >
+                          {resetLoading ? 'Resetting...' : 'Yes'}
+                        </button>
+                        <button
+                          onClick={() => setResetUserId(null)}
+                          className="underline text-gray-500"
+                        >
+                          Cancel
+                        </button>
+                      </span>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

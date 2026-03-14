@@ -121,3 +121,14 @@ const attachmentDownloadLimiter = new RateLimiterMemory({ points: 60, duration: 
 export async function checkAttachmentDownloadRateLimit(userId: string): Promise<void> {
   await attachmentDownloadLimiter.consume(userId)
 }
+
+// 20 profile updates per minute per admin
+const userProfileUpdateLimiter = new RateLimiterMemory({
+  points: 20,
+  duration: 60,
+  blockDuration: 60,
+})
+
+export async function checkUserProfileUpdateRateLimit(userId: string): Promise<void> {
+  await userProfileUpdateLimiter.consume(userId)
+}

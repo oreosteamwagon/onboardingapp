@@ -61,3 +61,36 @@ export function validateApprovalAction(v: unknown): string | null {
   }
   return null
 }
+
+// Letters (basic Latin + Latin Extended U+00C0-U+024F), spaces, hyphens, apostrophes, periods
+// 1-100 chars, required (non-empty)
+const NAME_RE = /^[a-zA-Z\u00C0-\u024F'\-. ]{1,100}$/
+
+export function validateName(v: unknown, fieldName: string): string | null {
+  if (typeof v !== 'string' || !NAME_RE.test(v)) {
+    return `${fieldName} must be 1-100 characters and contain only letters, spaces, hyphens, apostrophes, or periods`
+  }
+  return null
+}
+
+// Letters, digits, spaces, hyphens, ampersands — e.g. "R&D", "IT Support", "Human Resources"
+// 1-100 chars, required
+const DEPT_RE = /^[a-zA-Z0-9\u00C0-\u024F &\-]{1,100}$/
+
+export function validateDepartment(v: unknown): string | null {
+  if (typeof v !== 'string' || !DEPT_RE.test(v)) {
+    return 'department must be 1-100 characters and contain only letters, digits, spaces, hyphens, or ampersands'
+  }
+  return null
+}
+
+// Alphanumeric, hyphens, underscores — e.g. "ENG-001", "HR_MGR", "P001"
+// 1-50 chars, required
+const POS_RE = /^[a-zA-Z0-9\-_]{1,50}$/
+
+export function validatePositionCode(v: unknown): string | null {
+  if (typeof v !== 'string' || !POS_RE.test(v)) {
+    return 'positionCode must be 1-50 characters and contain only letters, digits, hyphens, or underscores'
+  }
+  return null
+}

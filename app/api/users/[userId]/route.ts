@@ -2,9 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageUsers } from '@/lib/permissions'
+import { checkUserProfileUpdateRateLimit } from '@/lib/ratelimit'
+import { validateName, validateDepartment, validatePositionCode } from '@/lib/validation'
 import type { Role } from '@prisma/client'
 
 const VALID_ROLES: Role[] = ['USER', 'PAYROLL', 'HR', 'SUPERVISOR', 'ADMIN']
+
+const USER_SELECT = {
+  id: true,
+  username: true,
+  email: true,
+  role: true,
+  active: true,
+  createdAt: true,
+  firstName: true,
+  lastName: true,
+  preferredFirstName: true,
+  preferredLastName: true,
+  department: true,
+  positionCode: true,
+} as const
 
 export async function PATCH(
   req: NextRequest,
@@ -32,21 +49,73 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const data: Record<string, unknown> = {}
   const payload = body as Record<string, unknown>
+  const errors: string[] = []
+  const data: Record<string, unknown> = {}
 
   if ('active' in payload) {
     if (typeof payload.active !== 'boolean') {
-      return NextResponse.json({ error: 'active must be a boolean' }, { status: 400 })
+      errors.push('active must be a boolean')
+    } else {
+      data.active = payload.active
     }
-    data.active = payload.active
   }
 
   if ('role' in payload) {
     if (!VALID_ROLES.includes(payload.role as Role)) {
-      return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+      errors.push('Invalid role')
+    } else {
+      data.role = payload.role
     }
-    data.role = payload.role
+  }
+
+  // Profile fields
+  if ('firstName' in payload) {
+    const err = validateName(payload.firstName, 'firstName')
+    if (err) errors.push(err)
+    else data.firstName = payload.firstName
+  }
+
+  if ('lastName' in payload) {
+    const err = validateName(payload.lastName, 'lastName')
+    if (err) errors.push(err)
+    else data.lastName = payload.lastName
+  }
+
+  if ('preferredFirstName' in payload) {
+    if (payload.preferredFirstName === null) {
+      data.preferredFirstName = null
+    } else {
+      const err = validateName(payload.preferredFirstName, 'preferredFirstName')
+      if (err) errors.push(err)
+      else data.preferredFirstName = payload.preferredFirstName
+    }
+  }
+
+  if ('preferredLastName' in payload) {
+    if (payload.preferredLastName === null) {
+      data.preferredLastName = null
+    } else {
+      const err = validateName(payload.preferredLastName, 'preferredLastName')
+      if (err) errors.push(err)
+      else data.preferredLastName = payload.preferredLastName
+    }
+  }
+
+  if ('department' in payload) {
+    const err = validateDepartment(payload.department)
+    if (err) errors.push(err)
+    else data.department = payload.department
+  }
+
+  if ('positionCode' in payload) {
+    const err = validatePositionCode(payload.positionCode)
+    if (err) errors.push(err)
+    else data.positionCode = payload.positionCode
+  }
+
+  if (errors.length > 0) {
+    return NextResponse.json({ errors }, { status: 400 })
   }
 
   if (Object.keys(data).length === 0) {
@@ -54,17 +123,16 @@ export async function PATCH(
   }
 
   try {
+    await checkUserProfileUpdateRateLimit(session.user.id)
+  } catch {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
+  try {
     const user = await prisma.user.update({
       where: { id: userId },
       data,
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true,
-        active: true,
-        createdAt: true,
-      },
+      select: USER_SELECT,
     })
     return NextResponse.json(user)
   } catch (err: unknown) {

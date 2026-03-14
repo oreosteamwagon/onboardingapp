@@ -35,6 +35,12 @@ model User {
   role                 Role           @default(USER)
   active               Boolean        @default(true)
   createdAt            DateTime       @default(now())
+  firstName            String?
+  lastName             String?
+  preferredFirstName   String?
+  preferredLastName    String?
+  department           String?
+  positionCode         String?
   userTasks              UserTask[]
   approvedUserTasks      UserTask[]       @relation("TaskApprover")
   documents              Document[]

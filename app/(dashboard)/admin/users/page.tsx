@@ -26,6 +26,12 @@ export default async function UsersPage() {
       role: true,
       active: true,
       createdAt: true,
+      firstName: true,
+      lastName: true,
+      preferredFirstName: true,
+      preferredLastName: true,
+      department: true,
+      positionCode: true,
     },
   })
 

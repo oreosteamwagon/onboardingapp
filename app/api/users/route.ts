@@ -5,8 +5,24 @@ import { canManageUsers } from '@/lib/permissions'
 import argon2 from 'argon2'
 import { randomBytes } from 'crypto'
 import type { Role } from '@prisma/client'
+import { validateName, validateDepartment, validatePositionCode } from '@/lib/validation'
 
 const VALID_ROLES: Role[] = ['USER', 'PAYROLL', 'HR', 'SUPERVISOR', 'ADMIN']
+
+const USER_SELECT = {
+  id: true,
+  username: true,
+  email: true,
+  role: true,
+  active: true,
+  createdAt: true,
+  firstName: true,
+  lastName: true,
+  preferredFirstName: true,
+  preferredLastName: true,
+  department: true,
+  positionCode: true,
+} as const
 
 export async function GET() {
   const session = await auth()
@@ -20,14 +36,7 @@ export async function GET() {
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      username: true,
-      email: true,
-      role: true,
-      active: true,
-      createdAt: true,
-    },
+    select: USER_SELECT,
   })
 
   return NextResponse.json(users)
@@ -60,7 +69,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
-  const { username, email, role } = body as {
+  const payload = body as Record<string, unknown>
+  const { username, email, role } = payload as {
     username: string
     email: string
     role: string
@@ -76,6 +86,34 @@ export async function POST(req: NextRequest) {
 
   if (!VALID_ROLES.includes(role as Role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+  }
+
+  const errors: string[] = []
+
+  const firstNameErr = validateName(payload.firstName, 'firstName')
+  if (firstNameErr) errors.push(firstNameErr)
+
+  const lastNameErr = validateName(payload.lastName, 'lastName')
+  if (lastNameErr) errors.push(lastNameErr)
+
+  if (payload.preferredFirstName !== undefined && payload.preferredFirstName !== null) {
+    const err = validateName(payload.preferredFirstName, 'preferredFirstName')
+    if (err) errors.push(err)
+  }
+
+  if (payload.preferredLastName !== undefined && payload.preferredLastName !== null) {
+    const err = validateName(payload.preferredLastName, 'preferredLastName')
+    if (err) errors.push(err)
+  }
+
+  const departmentErr = validateDepartment(payload.department)
+  if (departmentErr) errors.push(departmentErr)
+
+  const positionCodeErr = validatePositionCode(payload.positionCode)
+  if (positionCodeErr) errors.push(positionCodeErr)
+
+  if (errors.length > 0) {
+    return NextResponse.json({ errors }, { status: 400 })
   }
 
   const tempPassword = randomBytes(12).toString('base64url')
@@ -94,15 +132,14 @@ export async function POST(req: NextRequest) {
         passwordHash,
         role: role as Role,
         active: true,
+        firstName: payload.firstName as string,
+        lastName: payload.lastName as string,
+        preferredFirstName: (payload.preferredFirstName as string | null | undefined) ?? null,
+        preferredLastName: (payload.preferredLastName as string | null | undefined) ?? null,
+        department: payload.department as string,
+        positionCode: payload.positionCode as string,
       },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true,
-        active: true,
-        createdAt: true,
-      },
+      select: USER_SELECT,
     })
 
     return NextResponse.json({ user, tempPassword }, { status: 201 })

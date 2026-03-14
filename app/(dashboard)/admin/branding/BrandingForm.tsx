@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface BrandingFormProps {
@@ -12,6 +12,7 @@ interface BrandingFormProps {
 
 export default function BrandingForm({
   orgName: initialOrgName,
+  logoPath: initialLogoPath,
   primaryColor: initialPrimary,
   accentColor: initialAccent,
 }: BrandingFormProps) {
@@ -20,9 +21,23 @@ export default function BrandingForm({
   const [primaryColor, setPrimaryColor] = useState(initialPrimary)
   const [accentColor, setAccentColor] = useState(initialAccent)
   const [logoFile, setLogoFile] = useState<File | null>(null)
+  // Object URL for the locally selected file — shown as a preview before save
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null)
+  // Tracks whether the DB has a saved logo; updated after a successful save
+  const [savedLogoPath, setSavedLogoPath] = useState<string | null>(initialLogoPath)
+  // Incremented after each successful save to cache-bust the logo img
+  const [logoKey, setLogoKey] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0] ?? null
+    setLogoFile(f)
+    if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl)
+    setLogoPreviewUrl(f ? URL.createObjectURL(f) : null)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -51,6 +66,15 @@ export default function BrandingForm({
       }
 
       setSuccess(true)
+      // Update saved logo state so the img src reflects the new logo
+      if (data.logoPath) setSavedLogoPath(data.logoPath)
+      // Cache-bust the logo endpoint so the browser fetches the new file
+      setLogoKey((k) => k + 1)
+      // Clean up the preview object URL and clear the file input
+      if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl)
+      setLogoPreviewUrl(null)
+      setLogoFile(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
       router.refresh()
     } catch {
       setError('Unexpected error saving branding.')
@@ -58,6 +82,10 @@ export default function BrandingForm({
       setLoading(false)
     }
   }
+
+  // Show the local preview while a file is selected; otherwise show the saved logo
+  const displayLogoUrl = logoPreviewUrl ?? (savedLogoPath ? `/api/branding/logo?k=${logoKey}` : null)
+  const isPendingPreview = !!logoPreviewUrl
 
   return (
     <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow px-8 py-6 max-w-lg">
@@ -120,10 +148,23 @@ export default function BrandingForm({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Logo (PNG/JPG, max 5 MB)
         </label>
+        {displayLogoUrl && (
+          <div className="mb-3">
+            <img
+              src={displayLogoUrl}
+              alt="Logo preview"
+              className="h-16 w-auto object-contain rounded border border-gray-200 p-1 bg-gray-50"
+            />
+            {isPendingPreview && (
+              <p className="text-xs text-gray-400 mt-1">Preview — save to apply</p>
+            )}
+          </div>
+        )}
         <input
+          ref={fileInputRef}
           type="file"
           accept="image/png,image/jpeg"
-          onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+          onChange={handleFileChange}
           className="block text-sm text-gray-600 file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-3 file:py-1 file:text-sm file:font-medium hover:file:bg-gray-200"
         />
       </div>

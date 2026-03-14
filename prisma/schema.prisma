@@ -63,15 +63,17 @@ model BrandingSetting {
 }
 
 model OnboardingTask {
-  id            String         @id @default(cuid())
-  title         String
-  description   String?
-  taskType      TaskType       @default(STANDARD)
-  order         Int            @default(0)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  userTasks     UserTask[]
-  workflowTasks WorkflowTask[]
+  id                 String         @id @default(cuid())
+  title              String
+  description        String?
+  taskType           TaskType       @default(STANDARD)
+  order              Int            @default(0)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  resourceDocumentId String?
+  resourceDocument   Document?      @relation("TaskResource", fields: [resourceDocumentId], references: [id])
+  userTasks          UserTask[]
+  workflowTasks      WorkflowTask[]
 }
 
 model UserTask {
@@ -97,15 +99,17 @@ model UserTask {
 }
 
 model Document {
-  id          String    @id @default(cuid())
+  id          String           @id @default(cuid())
   uploadedBy  String
   filename    String
-  storagePath String    @unique
-  category    String    @default("general")
-  uploadedAt  DateTime  @default(now())
-  uploader    User      @relation(fields: [uploadedBy], references: [id])
+  storagePath String           @unique
+  category    String           @default("general")
+  uploadedAt  DateTime         @default(now())
+  isResource  Boolean          @default(false)
+  uploader    User             @relation(fields: [uploadedBy], references: [id])
   // userTask is null for general documents; set when document proves an UPLOAD task completion
   userTask    UserTask?
+  linkedTasks OnboardingTask[] @relation("TaskResource")
 
   @@index([uploadedBy])
 }

@@ -31,6 +31,7 @@ export default async function DocumentsPage() {
     category: d.category,
     uploadedAt: d.uploadedAt.toISOString(),
     uploaderName: d.uploader.username,
+    isResource: d.isResource,
   }))
 
   return (

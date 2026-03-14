@@ -62,7 +62,11 @@ export default async function OnboardingPage({ params }: PageProps) {
       workflow: {
         include: {
           tasks: {
-            include: { task: true },
+            include: {
+              task: {
+                include: { resourceDocument: { select: { id: true, filename: true } } },
+              },
+            },
             orderBy: { order: 'asc' },
           },
         },
@@ -117,6 +121,8 @@ export default async function OnboardingPage({ params }: PageProps) {
           filename: a.filename,
           uploadedAt: a.uploadedAt.toISOString(),
         })) ?? [],
+        resourceDocumentId: task.resourceDocument?.id ?? null,
+        resourceDocumentFilename: task.resourceDocument?.filename ?? null,
       }
     }),
   }))

@@ -26,7 +26,7 @@ export function canManageUsers(role: Role): boolean {
 }
 
 export function canUploadDocuments(role: Role): boolean {
-  return hasRole(role, Role.HR)
+  return hasRole(role, Role.PAYROLL)
 }
 
 export function canViewAllTasks(role: Role): boolean {
@@ -88,6 +88,11 @@ export function canManageAttachments(role: Role): boolean {
 // SUPERVISOR+ may download any task attachment; assigned user is checked at route level
 export function canDownloadAttachment(role: Role): boolean {
   return canApprove(role) // SUPERVISOR+
+}
+
+// Any authenticated user may download a Resource document
+export function canAccessResource(_role: Role): boolean {
+  return true
 }
 
 // Only ADMIN may permanently delete a document from the library

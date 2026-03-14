@@ -9,17 +9,25 @@ const TASK_TYPES: { value: TaskType; label: string; hint: string }[] = [
   { value: 'UPLOAD', label: 'File Upload', hint: 'User must upload a document' },
 ]
 
+interface ResourceDoc {
+  id: string
+  filename: string
+}
+
 interface Task {
   id: string
   title: string
   description: string | null
   taskType: TaskType
   order: number
+  resourceDocumentId: string | null
+  resourceDocument: ResourceDoc | null
 }
 
 interface TaskManagerProps {
   tasks: Task[]
   viewerIsAdmin: boolean
+  resources: ResourceDoc[]
 }
 
 const emptyForm = {
@@ -27,9 +35,10 @@ const emptyForm = {
   description: '',
   taskType: 'STANDARD' as TaskType,
   order: 0,
+  resourceDocumentId: null as string | null,
 }
 
-export default function TaskManager({ tasks: initial, viewerIsAdmin }: TaskManagerProps) {
+export default function TaskManager({ tasks: initial, viewerIsAdmin, resources }: TaskManagerProps) {
   const router = useRouter()
   const [tasks, setTasks] = useState(initial)
   const [error, setError] = useState<string | null>(null)
@@ -63,6 +72,7 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin }: TaskManag
       description: task.description ?? '',
       taskType: task.taskType,
       order: task.order,
+      resourceDocumentId: task.resourceDocumentId,
     })
   }
 
@@ -79,6 +89,7 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin }: TaskManag
           description: form.description || null,
           taskType: form.taskType,
           order: form.order,
+          resourceDocumentId: form.resourceDocumentId || null,
         }),
       })
       const data = await res.json()
@@ -112,6 +123,7 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin }: TaskManag
           description: editForm.description || null,
           taskType: editForm.taskType,
           order: editForm.order,
+          resourceDocumentId: editForm.resourceDocumentId || null,
         }),
       })
       const data = await res.json()
@@ -192,6 +204,7 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin }: TaskManag
           onCancel={() => setShowCreate(false)}
           loading={loading}
           submitLabel="Create Task"
+          resources={resources}
         />
       )}
 
@@ -211,6 +224,7 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin }: TaskManag
                   onCancel={() => { setEditingId(null); setEditForm(null) }}
                   loading={loading}
                   submitLabel="Save Changes"
+                  resources={resources}
                 />
               </div>
             ) : (
@@ -226,6 +240,19 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin }: TaskManag
                   </div>
                   {task.description && (
                     <p className="text-sm text-gray-500">{task.description}</p>
+                  )}
+                  {task.resourceDocument && (
+                    <p className="text-xs mt-1">
+                      <span className="text-gray-400">Resource: </span>
+                      <a
+                        href={`/api/documents/${task.resourceDocument.id}/download`}
+                        className="text-indigo-600 hover:underline"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {task.resourceDocument.filename}
+                      </a>
+                    </p>
                   )}
                 </div>
                 <div className="flex gap-2 shrink-0">
@@ -275,6 +302,7 @@ interface TaskFormProps {
   onCancel: () => void
   loading: boolean
   submitLabel: string
+  resources: ResourceDoc[]
 }
 
 function TaskForm({
@@ -284,6 +312,7 @@ function TaskForm({
   onCancel,
   loading,
   submitLabel,
+  resources,
 }: TaskFormProps) {
   return (
     <form
@@ -354,6 +383,24 @@ function TaskForm({
             }
             className="w-32 rounded-md border border-gray-300 px-3 py-2 text-sm"
           />
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Linked Resource (optional)
+          </label>
+          <select
+            value={form.resourceDocumentId ?? ''}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, resourceDocumentId: e.target.value || null }))
+            }
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="">— None —</option>
+            {resources.map((r) => (
+              <option key={r.id} value={r.id}>{r.filename}</option>
+            ))}
+          </select>
         </div>
       </div>
 

@@ -43,7 +43,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
   const document = await prisma.document.findUnique({
     where: { id: params.documentId },
-    select: { id: true, uploadedBy: true, filename: true, storagePath: true },
+    select: { id: true, uploadedBy: true, filename: true, storagePath: true, isResource: true },
   })
 
   if (!document) {
@@ -53,7 +53,8 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   const isUploader = session.user.id === document.uploadedBy
   const role = session.user.role as Role
 
-  if (!isUploader && !canDownloadDocument(role)) {
+  // Resources are downloadable by any authenticated user
+  if (!document.isResource && !isUploader && !canDownloadDocument(role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

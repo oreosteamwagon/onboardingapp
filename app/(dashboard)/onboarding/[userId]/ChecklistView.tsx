@@ -24,6 +24,8 @@ interface TaskItem {
   approvedAt: string | null
   approvedByUsername: string | null
   attachments: AttachmentItem[]
+  resourceDocumentId: string | null
+  resourceDocumentFilename: string | null
 }
 
 interface WorkflowGroup {
@@ -452,6 +454,19 @@ function StandardTaskItem({
         {task.description && (
           <p className="text-sm text-gray-500 mt-0.5">{task.description}</p>
         )}
+        {task.resourceDocumentId && task.resourceDocumentFilename && (
+          <p className="text-xs mt-1">
+            <span className="text-gray-500">Resource: </span>
+            <a
+              href={`/api/documents/${task.resourceDocumentId}/download`}
+              className="text-indigo-600 hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {task.resourceDocumentFilename}
+            </a>
+          </p>
+        )}
         {task.completed && task.completedAt && (
           <p className="text-xs text-gray-400 mt-1">
             Completed {new Date(task.completedAt).toLocaleString()}
@@ -563,6 +578,19 @@ function UploadTaskItem({
 
         {task.description && (
           <p className="text-sm text-gray-500 mt-0.5">{task.description}</p>
+        )}
+        {task.resourceDocumentId && task.resourceDocumentFilename && (
+          <p className="text-xs mt-1">
+            <span className="text-gray-500">Resource: </span>
+            <a
+              href={`/api/documents/${task.resourceDocumentId}/download`}
+              className="text-indigo-600 hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {task.resourceDocumentFilename}
+            </a>
+          </p>
         )}
 
         {task.completed ? (

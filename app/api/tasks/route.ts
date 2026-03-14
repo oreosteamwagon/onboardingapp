@@ -8,6 +8,7 @@ import {
   validateDescription,
   validateTaskType,
   validateOrder,
+  validateCuid,
 } from '@/lib/validation'
 import type { Role, TaskType } from '@prisma/client'
 
@@ -24,6 +25,9 @@ export async function GET() {
 
   const tasks = await prisma.onboardingTask.findMany({
     orderBy: { order: 'asc' },
+    include: {
+      resourceDocument: { select: { id: true, filename: true } },
+    },
   })
 
   return NextResponse.json(tasks)
@@ -58,7 +62,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { title, description, taskType, order } = body as Record<string, unknown>
+  const { title, description, taskType, order, resourceDocumentId } = body as Record<string, unknown>
 
   const titleErr = validateTitle(title)
   if (titleErr) return NextResponse.json({ error: titleErr }, { status: 400 })
@@ -69,12 +73,31 @@ export async function POST(req: NextRequest) {
   const typeErr = validateTaskType(taskType)
   if (typeErr) return NextResponse.json({ error: typeErr }, { status: 400 })
 
+  let resolvedResourceDocumentId: string | null = null
+  if (resourceDocumentId != null) {
+    const cuidErr = validateCuid(resourceDocumentId, 'resourceDocumentId')
+    if (cuidErr) return NextResponse.json({ error: cuidErr }, { status: 400 })
+
+    const resourceDoc = await prisma.document.findUnique({
+      where: { id: resourceDocumentId as string },
+      select: { isResource: true },
+    })
+    if (!resourceDoc || !resourceDoc.isResource) {
+      return NextResponse.json({ error: 'resourceDocumentId must reference an existing Resource document' }, { status: 400 })
+    }
+    resolvedResourceDocumentId = resourceDocumentId as string
+  }
+
   const task = await prisma.onboardingTask.create({
     data: {
       title: (title as string).trim(),
       description: typeof description === 'string' ? description.trim() : null,
       taskType: (taskType as TaskType | undefined) ?? 'STANDARD',
       order: validateOrder(order),
+      resourceDocumentId: resolvedResourceDocumentId,
+    },
+    include: {
+      resourceDocument: { select: { id: true, filename: true } },
     },
   })
 

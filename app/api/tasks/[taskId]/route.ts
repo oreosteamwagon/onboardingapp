@@ -8,6 +8,7 @@ import {
   validateDescription,
   validateTaskType,
   validateOrder,
+  validateCuid,
 } from '@/lib/validation'
 import type { Role, TaskType } from '@prisma/client'
 
@@ -31,7 +32,10 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid task ID' }, { status: 400 })
   }
 
-  const task = await prisma.onboardingTask.findUnique({ where: { id: taskId } })
+  const task = await prisma.onboardingTask.findUnique({
+    where: { id: taskId },
+    include: { resourceDocument: { select: { id: true, filename: true } } },
+  })
   if (!task) {
     return NextResponse.json({ error: 'Task not found' }, { status: 404 })
   }
@@ -78,9 +82,15 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { title, description, taskType, order } = body as Record<string, unknown>
+  const { title, description, taskType, order, resourceDocumentId } = body as Record<string, unknown>
 
-  if (title === undefined && description === undefined && taskType === undefined && order === undefined) {
+  if (
+    title === undefined &&
+    description === undefined &&
+    taskType === undefined &&
+    order === undefined &&
+    !('resourceDocumentId' in (body as object))
+  ) {
     return NextResponse.json({ error: 'No fields provided to update' }, { status: 400 })
   }
 
@@ -99,6 +109,25 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     if (err) return NextResponse.json({ error: err }, { status: 400 })
   }
 
+  let resolvedResourceDocumentId: string | null | undefined = undefined
+  if ('resourceDocumentId' in (body as object)) {
+    if (resourceDocumentId === null) {
+      resolvedResourceDocumentId = null
+    } else {
+      const cuidErr = validateCuid(resourceDocumentId, 'resourceDocumentId')
+      if (cuidErr) return NextResponse.json({ error: cuidErr }, { status: 400 })
+
+      const resourceDoc = await prisma.document.findUnique({
+        where: { id: resourceDocumentId as string },
+        select: { isResource: true },
+      })
+      if (!resourceDoc || !resourceDoc.isResource) {
+        return NextResponse.json({ error: 'resourceDocumentId must reference an existing Resource document' }, { status: 400 })
+      }
+      resolvedResourceDocumentId = resourceDocumentId as string
+    }
+  }
+
   const task = await prisma.onboardingTask.update({
     where: { id: taskId },
     data: {
@@ -108,6 +137,10 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       }),
       ...(taskType !== undefined && { taskType: taskType as TaskType }),
       ...(order !== undefined && { order: validateOrder(order) }),
+      ...(resolvedResourceDocumentId !== undefined && { resourceDocumentId: resolvedResourceDocumentId }),
+    },
+    include: {
+      resourceDocument: { select: { id: true, filename: true } },
     },
   })
 

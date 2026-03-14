@@ -9,6 +9,7 @@ interface Doc {
   category: string
   uploadedAt: string
   uploaderName: string
+  isResource: boolean
 }
 
 interface DocumentsViewProps {
@@ -160,7 +161,14 @@ export default function DocumentsView({
             <tbody className="divide-y divide-gray-200">
               {documents.map((d) => (
                 <tr key={d.id}>
-                  <td className="px-6 py-4 text-sm text-gray-900">{d.filename}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900">
+                    <span>{d.filename}</span>
+                    {d.isResource && (
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Resource
+                      </span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-sm text-gray-600 capitalize">
                     {d.category}
                   </td>

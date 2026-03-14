@@ -7,19 +7,27 @@ import type { Role } from '@prisma/client'
 
 const VALID_CATEGORIES = ['general', 'policy', 'benefits', 'onboarding']
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const type = new URL(req.url).searchParams.get('type')
   const role = session.user.role as Role
-  const visibilityFilter = canViewAllDocuments(role)
-    ? {}
-    : { uploadedBy: session.user.id }
+
+  let whereClause: Record<string, unknown>
+  if (type === 'resource') {
+    // Any authenticated user may list resource documents
+    whereClause = { isResource: true }
+  } else {
+    whereClause = canViewAllDocuments(role)
+      ? {}
+      : { uploadedBy: session.user.id }
+  }
 
   const documents = await prisma.document.findMany({
-    where: visibilityFilter,
+    where: whereClause,
     orderBy: { uploadedAt: 'desc' },
     include: {
       uploader: { select: { username: true } },
@@ -33,6 +41,7 @@ export async function GET() {
       category: d.category,
       uploadedAt: d.uploadedAt.toISOString(),
       uploaderName: d.uploader.username,
+      isResource: d.isResource,
     })),
   )
 }
@@ -45,7 +54,7 @@ export async function POST(req: NextRequest) {
 
   if (!canUploadDocuments(session.user.role as Role)) {
     return NextResponse.json(
-      { error: 'Forbidden: HR role or above required to upload documents' },
+      { error: 'Forbidden: PAYROLL role or above required to upload documents' },
       { status: 403 },
     )
   }
@@ -92,6 +101,7 @@ export async function POST(req: NextRequest) {
       filename,
       storagePath,
       category: categoryStr,
+      isResource: true,
     },
     include: {
       uploader: { select: { username: true } },
@@ -105,6 +115,7 @@ export async function POST(req: NextRequest) {
       category: doc.category,
       uploadedAt: doc.uploadedAt.toISOString(),
       uploaderName: doc.uploader.username,
+      isResource: doc.isResource,
     },
     { status: 201 },
   )

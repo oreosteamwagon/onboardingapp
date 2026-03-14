@@ -16,12 +16,10 @@ interface NavBarProps {
 
 export default function NavBar({ user }: NavBarProps) {
   const { orgName } = useBranding()
-  const isAdmin = user.role === 'ADMIN'
-  const isHrOrAbove = ['HR', 'SUPERVISOR', 'ADMIN'].includes(user.role)
   const canApprove = ['PAYROLL', 'HR', 'SUPERVISOR', 'ADMIN'].includes(user.role)
-  const canManageWorkflows = ['HR', 'ADMIN'].includes(user.role)
-  // PAYROLL+ see "Team Tasks" (their team's progress) instead of their own checklist
-  const showTeamTasks = canApprove
+  const canAdmin = ['HR', 'SUPERVISOR', 'ADMIN'].includes(user.role)
+  // PAYROLL+ see "Onboarding List" (their team's progress) instead of their own checklist
+  const showOnboardingList = canApprove
 
   return (
     <nav className="bg-primary text-white shadow-sm">
@@ -31,12 +29,12 @@ export default function NavBar({ user }: NavBarProps) {
             <Link href="/dashboard" className="font-semibold text-lg">
               {orgName}
             </Link>
-            {showTeamTasks ? (
+            {showOnboardingList ? (
               <Link
                 href="/team-tasks"
                 className="text-sm hover:text-white/80 transition-colors"
               >
-                Team Tasks
+                Onboarding List
               </Link>
             ) : (
               <Link
@@ -60,43 +58,13 @@ export default function NavBar({ user }: NavBarProps) {
                 Approvals
               </Link>
             )}
-            {isHrOrAbove && (
+            {canAdmin && (
               <Link
-                href="/admin/tasks"
+                href="/admin"
                 className="text-sm hover:text-white/80 transition-colors"
               >
-                Tasks
+                Admin
               </Link>
-            )}
-            {canManageWorkflows && (
-              <Link
-                href="/admin/workflows"
-                className="text-sm hover:text-white/80 transition-colors"
-              >
-                Workflows
-              </Link>
-            )}
-            {isAdmin && (
-              <>
-                <Link
-                  href="/admin/users"
-                  className="text-sm hover:text-white/80 transition-colors"
-                >
-                  Users
-                </Link>
-                <Link
-                  href="/admin/branding"
-                  className="text-sm hover:text-white/80 transition-colors"
-                >
-                  Branding
-                </Link>
-                <Link
-                  href="/admin/reset"
-                  className="text-sm text-red-300 hover:text-red-100 transition-colors"
-                >
-                  Reset
-                </Link>
-              </>
             )}
           </div>
           <div className="flex items-center gap-4">

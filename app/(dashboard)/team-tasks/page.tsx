@@ -124,7 +124,7 @@ export default async function TeamTasksPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Team Tasks</h1>
+      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Onboarding List</h1>
       <TeamTasksView teamData={teamData} assignmentOptions={assignmentOptions} />
     </div>
   )

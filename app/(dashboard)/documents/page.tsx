@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { redirect } from 'next/navigation'
-import { canUploadDocuments, canViewAllDocuments } from '@/lib/permissions'
+import { canUploadDocuments, canViewAllDocuments, canDeleteDocument } from '@/lib/permissions'
 import type { Role } from '@prisma/client'
 import DocumentsView from './DocumentsView'
 
@@ -11,6 +11,7 @@ export default async function DocumentsPage() {
 
   const role = session.user.role as Role
   const canUpload = canUploadDocuments(role)
+  const canDelete = canDeleteDocument(role)
 
   const visibilityFilter = canViewAllDocuments(role)
     ? {}
@@ -35,7 +36,7 @@ export default async function DocumentsPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-gray-900 mb-6">Documents</h1>
-      <DocumentsView documents={docList} canUpload={canUpload} />
+      <DocumentsView documents={docList} canUpload={canUpload} canDelete={canDelete} />
     </div>
   )
 }

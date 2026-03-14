@@ -99,6 +99,17 @@ export async function checkPasswordResetRateLimit(userId: string): Promise<void>
   await passwordResetLimiter.consume(userId)
 }
 
+// 10 document deletes per minute per ADMIN — tight limit for a destructive operation
+const documentDeleteLimiter = new RateLimiterMemory({
+  points: 10,
+  duration: 60,
+  blockDuration: 60,
+})
+
+export async function checkDocumentDeleteRateLimit(userId: string): Promise<void> {
+  await documentDeleteLimiter.consume(userId)
+}
+
 // 10 attachment uploads per minute per authenticated HR+ user
 const attachmentUploadLimiter = new RateLimiterMemory({ points: 10, duration: 60, blockDuration: 120 })
 export async function checkAttachmentUploadRateLimit(userId: string): Promise<void> {

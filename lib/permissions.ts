@@ -90,6 +90,11 @@ export function canDownloadAttachment(role: Role): boolean {
   return canApprove(role) // SUPERVISOR+
 }
 
+// Only ADMIN may permanently delete a document from the library
+export function canDeleteDocument(role: Role): boolean {
+  return role === Role.ADMIN
+}
+
 // Returns allowed roles from a comma-separated header or session
 export function assertRole(
   userRole: Role | undefined | null,

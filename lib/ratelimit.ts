@@ -132,3 +132,14 @@ const userProfileUpdateLimiter = new RateLimiterMemory({
 export async function checkUserProfileUpdateRateLimit(userId: string): Promise<void> {
   await userProfileUpdateLimiter.consume(userId)
 }
+
+// 120 logo fetches per minute per IP — public endpoint, keyed by IP
+const logoLimiter = new RateLimiterMemory({
+  points: 120,
+  duration: 60,
+  blockDuration: 60,
+})
+
+export async function checkLogoRateLimit(ip: string): Promise<void> {
+  await logoLimiter.consume(ip)
+}

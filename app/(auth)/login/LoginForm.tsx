@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useBranding } from '@/components/BrandingProvider'
 
 export default function LoginForm() {
-  const { orgName } = useBranding()
+  const { orgName, logoPath } = useBranding()
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get('callbackUrl') ?? '/dashboard'
@@ -43,6 +43,15 @@ export default function LoginForm() {
 
   return (
     <div className="bg-white rounded-xl shadow-md px-8 py-10">
+      {logoPath && (
+        <div className="flex justify-center mb-4">
+          <img
+            src="/api/branding/logo"
+            alt={orgName}
+            className="h-16 w-auto object-contain"
+          />
+        </div>
+      )}
       <h1 className="text-2xl font-semibold text-gray-900 mb-1 text-center">
         {orgName}
       </h1>

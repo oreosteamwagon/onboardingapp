@@ -98,3 +98,15 @@ const passwordResetLimiter = new RateLimiterMemory({
 export async function checkPasswordResetRateLimit(userId: string): Promise<void> {
   await passwordResetLimiter.consume(userId)
 }
+
+// 10 attachment uploads per minute per authenticated HR+ user
+const attachmentUploadLimiter = new RateLimiterMemory({ points: 10, duration: 60, blockDuration: 120 })
+export async function checkAttachmentUploadRateLimit(userId: string): Promise<void> {
+  await attachmentUploadLimiter.consume(userId)
+}
+
+// 60 attachment downloads per minute per authenticated user
+const attachmentDownloadLimiter = new RateLimiterMemory({ points: 60, duration: 60, blockDuration: 60 })
+export async function checkAttachmentDownloadRateLimit(userId: string): Promise<void> {
+  await attachmentDownloadLimiter.consume(userId)
+}

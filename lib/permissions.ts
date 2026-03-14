@@ -80,6 +80,16 @@ export function canDownloadDocument(role: Role): boolean {
   return canApprove(role)
 }
 
+// HR+ may upload or delete attachments on any user's task assignment
+export function canManageAttachments(role: Role): boolean {
+  return hasRole(role, Role.HR)
+}
+
+// SUPERVISOR+ may download any task attachment; assigned user is checked at route level
+export function canDownloadAttachment(role: Role): boolean {
+  return canApprove(role) // SUPERVISOR+
+}
+
 // Returns allowed roles from a comma-separated header or session
 export function assertRole(
   userRole: Role | undefined | null,

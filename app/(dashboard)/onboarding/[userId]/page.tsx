@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { redirect } from 'next/navigation'
-import { canApprove, canApproveAny } from '@/lib/permissions'
+import { canApprove, canApproveAny, canManageAttachments } from '@/lib/permissions'
 import type { Role } from '@prisma/client'
 import ChecklistView from './ChecklistView'
 
@@ -72,12 +72,18 @@ export default async function OnboardingPage({ params }: PageProps) {
     orderBy: { assignedAt: 'asc' },
   })
 
+  const viewerCanManageAttachments = canManageAttachments(viewerRole)
+
   // Fetch all UserTask records for this user, including document and approval info
   const userTaskRecords = await prisma.userTask.findMany({
     where: { userId: viewingUserId },
     include: {
       document: { select: { id: true, filename: true } },
       approvedBy: { select: { id: true, username: true } },
+      attachments: {
+        select: { id: true, filename: true, uploadedAt: true },
+        orderBy: { uploadedAt: 'asc' },
+      },
     },
   })
 
@@ -106,6 +112,11 @@ export default async function OnboardingPage({ params }: PageProps) {
         approvalStatus: ut?.approvalStatus ?? 'PENDING',
         approvedAt: ut?.approvedAt?.toISOString() ?? null,
         approvedByUsername: ut?.approvedBy?.username ?? null,
+        attachments: ut?.attachments?.map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          uploadedAt: a.uploadedAt.toISOString(),
+        })) ?? [],
       }
     }),
   }))
@@ -132,6 +143,7 @@ export default async function OnboardingPage({ params }: PageProps) {
           workflows={workflows}
           userId={viewingUserId}
           isOwnPage={isOwnPage}
+          viewerCanManageAttachments={viewerCanManageAttachments}
         />
       )}
     </div>

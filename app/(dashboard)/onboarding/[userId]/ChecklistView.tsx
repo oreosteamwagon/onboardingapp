@@ -3,6 +3,12 @@
 import { useRef, useState } from 'react'
 import type { TaskType, ApprovalStatus } from '@prisma/client'
 
+interface AttachmentItem {
+  id: string
+  filename: string
+  uploadedAt: string
+}
+
 interface TaskItem {
   id: string
   title: string
@@ -17,6 +23,7 @@ interface TaskItem {
   approvalStatus: ApprovalStatus
   approvedAt: string | null
   approvedByUsername: string | null
+  attachments: AttachmentItem[]
 }
 
 interface WorkflowGroup {
@@ -32,19 +39,38 @@ interface ChecklistViewProps {
   workflows: WorkflowGroup[]
   userId: string
   isOwnPage: boolean
+  viewerCanManageAttachments: boolean
 }
 
-export default function ChecklistView({ workflows, userId, isOwnPage }: ChecklistViewProps) {
+export default function ChecklistView({
+  workflows,
+  userId,
+  isOwnPage,
+  viewerCanManageAttachments,
+}: ChecklistViewProps) {
   const [groups, setGroups] = useState(workflows)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState<string | null>(null)
+  const [attachmentLoading, setAttachmentLoading] = useState<string | null>(null)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const attachmentInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   function updateTask(taskId: string, patch: Partial<TaskItem>) {
     setGroups((prev) =>
       prev.map((g) => ({
         ...g,
         tasks: g.tasks.map((t) => (t.id === taskId ? { ...t, ...patch } : t)),
+      })),
+    )
+  }
+
+  function updateAttachments(taskId: string, patch: AttachmentItem[]) {
+    setGroups((prev) =>
+      prev.map((g) => ({
+        ...g,
+        tasks: g.tasks.map((t) =>
+          t.id === taskId ? { ...t, attachments: patch } : t,
+        ),
       })),
     )
   }
@@ -116,6 +142,70 @@ export default function ChecklistView({ workflows, userId, isOwnPage }: Checklis
     }
   }
 
+  async function handleAttachmentUpload(taskId: string, file: File) {
+    setError(null)
+    setAttachmentLoading(taskId)
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const res = await fetch(`/api/users/${userId}/tasks/${taskId}/attachments`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'Attachment upload failed')
+        return
+      }
+
+      const currentTask = groups.flatMap((g) => g.tasks).find((t) => t.id === taskId)
+      const currentAttachments = currentTask?.attachments ?? []
+      updateAttachments(taskId, [
+        ...currentAttachments,
+        { id: data.id, filename: data.filename, uploadedAt: data.uploadedAt },
+      ])
+
+      const input = attachmentInputRefs.current[taskId]
+      if (input) input.value = ''
+    } catch {
+      setError('Unexpected error uploading attachment.')
+    } finally {
+      setAttachmentLoading(null)
+    }
+  }
+
+  async function handleAttachmentDelete(taskId: string, attachmentId: string) {
+    setError(null)
+    setAttachmentLoading(attachmentId)
+
+    try {
+      const res = await fetch(
+        `/api/users/${userId}/tasks/${taskId}/attachments/${attachmentId}`,
+        { method: 'DELETE' },
+      )
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error ?? 'Failed to delete attachment')
+        return
+      }
+
+      const currentTask = groups.flatMap((g) => g.tasks).find((t) => t.id === taskId)
+      const currentAttachments = currentTask?.attachments ?? []
+      updateAttachments(
+        taskId,
+        currentAttachments.filter((a) => a.id !== attachmentId),
+      )
+    } catch {
+      setError('Unexpected error deleting attachment.')
+    } finally {
+      setAttachmentLoading(null)
+    }
+  }
+
   return (
     <div className="space-y-8">
       {error && (
@@ -154,6 +244,13 @@ export default function ChecklistView({ workflows, userId, isOwnPage }: Checklis
                     isUploading={uploading === task.id}
                     onFileChange={(file) => handleFileUpload(task.id, file)}
                     inputRef={(el) => { fileInputRefs.current[task.id] = el }}
+                    viewerCanManageAttachments={viewerCanManageAttachments}
+                    attachmentLoadingKey={attachmentLoading}
+                    onAttachmentUpload={(file) => handleAttachmentUpload(task.id, file)}
+                    onAttachmentDelete={(attachmentId) =>
+                      handleAttachmentDelete(task.id, attachmentId)
+                    }
+                    attachmentInputRef={(el) => { attachmentInputRefs.current[task.id] = el }}
                   />
                 ) : (
                   <StandardTaskItem
@@ -161,6 +258,13 @@ export default function ChecklistView({ workflows, userId, isOwnPage }: Checklis
                     task={task}
                     isOwnPage={isOwnPage}
                     onToggle={() => handleToggle(task.id, task.completed)}
+                    viewerCanManageAttachments={viewerCanManageAttachments}
+                    attachmentLoadingKey={attachmentLoading}
+                    onAttachmentUpload={(file) => handleAttachmentUpload(task.id, file)}
+                    onAttachmentDelete={(attachmentId) =>
+                      handleAttachmentDelete(task.id, attachmentId)
+                    }
+                    attachmentInputRef={(el) => { attachmentInputRefs.current[task.id] = el }}
                   />
                 ),
               )}
@@ -203,16 +307,109 @@ function ApprovalBadge({ status, approvedByUsername, approvedAt }: {
   return null
 }
 
+// ---- Attachments section ----
+
+function AttachmentsSection({
+  taskId,
+  attachments,
+  viewerCanManageAttachments,
+  loadingKey,
+  onUpload,
+  onDelete,
+  inputRef,
+}: {
+  taskId: string
+  attachments: AttachmentItem[]
+  viewerCanManageAttachments: boolean
+  loadingKey: string | null
+  onUpload: (file: File) => void
+  onDelete: (attachmentId: string) => void
+  inputRef: (el: HTMLInputElement | null) => void
+}) {
+  if (attachments.length === 0 && !viewerCanManageAttachments) return null
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-100">
+      {attachments.length > 0 && (
+        <>
+          <p className="text-xs font-medium text-gray-500 mb-1">Provided documents</p>
+          <ul className="space-y-1">
+            {attachments.map((a) => (
+              <li key={a.id} className="flex items-center gap-2 text-xs text-gray-600">
+                <a
+                  href={`/api/attachments/${a.id}/download`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline truncate"
+                >
+                  {a.filename}
+                </a>
+                <span className="text-gray-400 shrink-0">
+                  {new Date(a.uploadedAt).toLocaleDateString()}
+                </span>
+                {viewerCanManageAttachments && (
+                  <button
+                    type="button"
+                    onClick={() => onDelete(a.id)}
+                    disabled={loadingKey === a.id}
+                    className="ml-auto text-red-400 hover:text-red-600 disabled:opacity-40 shrink-0"
+                    aria-label={`Remove attachment ${a.filename}`}
+                  >
+                    Remove
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {viewerCanManageAttachments && (
+        <div className="mt-2">
+          <label className="block text-xs text-gray-400 mb-1">
+            Attach file for user (PDF, DOCX, PNG, JPG — max 25 MB)
+          </label>
+          <input
+            type="file"
+            accept=".pdf,.docx,.png,.jpg,.jpeg"
+            ref={inputRef}
+            disabled={loadingKey === taskId}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) onUpload(file)
+            }}
+            className="block text-xs text-gray-500 file:mr-2 file:rounded file:border-0 file:bg-gray-100 file:px-2 file:py-0.5 file:text-xs file:font-medium hover:file:bg-gray-200 disabled:opacity-50"
+            aria-label={`Attach file to task`}
+          />
+          {loadingKey === taskId && (
+            <p className="text-xs text-gray-400 mt-1">Uploading...</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---- STANDARD task item ----
 
 function StandardTaskItem({
   task,
   isOwnPage,
   onToggle,
+  viewerCanManageAttachments,
+  attachmentLoadingKey,
+  onAttachmentUpload,
+  onAttachmentDelete,
+  attachmentInputRef,
 }: {
   task: TaskItem
   isOwnPage: boolean
   onToggle: () => void
+  viewerCanManageAttachments: boolean
+  attachmentLoadingKey: string | null
+  onAttachmentUpload: (file: File) => void
+  onAttachmentDelete: (attachmentId: string) => void
+  attachmentInputRef: (el: HTMLInputElement | null) => void
 }) {
   return (
     <li
@@ -260,6 +457,15 @@ function StandardTaskItem({
             Completed {new Date(task.completedAt).toLocaleString()}
           </p>
         )}
+        <AttachmentsSection
+          taskId={task.id}
+          attachments={task.attachments}
+          viewerCanManageAttachments={viewerCanManageAttachments}
+          loadingKey={attachmentLoadingKey}
+          onUpload={onAttachmentUpload}
+          onDelete={onAttachmentDelete}
+          inputRef={attachmentInputRef}
+        />
       </div>
     </li>
   )
@@ -273,12 +479,22 @@ function UploadTaskItem({
   isUploading,
   onFileChange,
   inputRef,
+  viewerCanManageAttachments,
+  attachmentLoadingKey,
+  onAttachmentUpload,
+  onAttachmentDelete,
+  attachmentInputRef,
 }: {
   task: TaskItem
   isOwnPage: boolean
   isUploading: boolean
   onFileChange: (file: File) => void
   inputRef: (el: HTMLInputElement | null) => void
+  viewerCanManageAttachments: boolean
+  attachmentLoadingKey: string | null
+  onAttachmentUpload: (file: File) => void
+  onAttachmentDelete: (attachmentId: string) => void
+  attachmentInputRef: (el: HTMLInputElement | null) => void
 }) {
   const approved = task.approvalStatus === 'APPROVED'
 
@@ -395,6 +611,16 @@ function UploadTaskItem({
         ) : (
           <p className="text-xs text-gray-400 mt-1">Awaiting file upload</p>
         )}
+
+        <AttachmentsSection
+          taskId={task.id}
+          attachments={task.attachments}
+          viewerCanManageAttachments={viewerCanManageAttachments}
+          loadingKey={attachmentLoadingKey}
+          onUpload={onAttachmentUpload}
+          onDelete={onAttachmentDelete}
+          inputRef={attachmentInputRef}
+        />
       </div>
     </li>
   )

@@ -35,12 +35,13 @@ model User {
   role                 Role           @default(USER)
   active               Boolean        @default(true)
   createdAt            DateTime       @default(now())
-  userTasks            UserTask[]
-  approvedUserTasks    UserTask[]     @relation("TaskApprover")
-  documents            Document[]
-  userWorkflows        UserWorkflow[] @relation("WorkflowUser")
-  supervisedWorkflows  UserWorkflow[] @relation("WorkflowSupervisor")
-  assignedWorkflowsBy  UserWorkflow[] @relation("WorkflowAssigner")
+  userTasks              UserTask[]
+  approvedUserTasks      UserTask[]       @relation("TaskApprover")
+  documents              Document[]
+  userWorkflows          UserWorkflow[]   @relation("WorkflowUser")
+  supervisedWorkflows    UserWorkflow[]   @relation("WorkflowSupervisor")
+  assignedWorkflowsBy    UserWorkflow[]   @relation("WorkflowAssigner")
+  uploadedAttachments    TaskAttachment[] @relation("AttachmentUploader")
 
   @@index([username])
   @@index([email])
@@ -68,19 +69,20 @@ model OnboardingTask {
 }
 
 model UserTask {
-  id             String          @id @default(cuid())
+  id             String           @id @default(cuid())
   userId         String
   taskId         String
-  completed      Boolean         @default(false)
+  completed      Boolean          @default(false)
   completedAt    DateTime?
-  documentId     String?         @unique
-  approvalStatus ApprovalStatus  @default(PENDING)
+  documentId     String?          @unique
+  approvalStatus ApprovalStatus   @default(PENDING)
   approvedAt     DateTime?
   approvedById   String?
-  user           User            @relation(fields: [userId], references: [id])
-  task           OnboardingTask  @relation(fields: [taskId], references: [id])
-  document       Document?       @relation(fields: [documentId], references: [id])
-  approvedBy     User?           @relation("TaskApprover", fields: [approvedById], references: [id])
+  user           User             @relation(fields: [userId], references: [id])
+  task           OnboardingTask   @relation(fields: [taskId], references: [id])
+  document       Document?        @relation(fields: [documentId], references: [id])
+  approvedBy     User?            @relation("TaskApprover", fields: [approvedById], references: [id])
+  attachments    TaskAttachment[]
 
   @@unique([userId, taskId])
   @@index([userId])
@@ -124,6 +126,22 @@ model WorkflowTask {
   @@unique([workflowId, taskId])
   @@index([workflowId])
   @@index([taskId])
+}
+
+// Files attached by HR+ staff to a specific user task assignment (given to the user)
+model TaskAttachment {
+  id           String   @id @default(cuid())
+  userTaskId   String
+  uploadedById String
+  filename     String
+  storagePath  String   @unique
+  uploadedAt   DateTime @default(now())
+
+  userTask     UserTask @relation(fields: [userTaskId], references: [id])
+  uploadedBy   User     @relation("AttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([userTaskId])
+  @@index([uploadedById])
 }
 
 // A user assigned to a workflow, with an optional supervisor as approver

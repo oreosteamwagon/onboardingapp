@@ -113,7 +113,8 @@ model Document {
   id          String           @id @default(cuid())
   uploadedBy  String
   filename    String
-  storagePath String           @unique
+  storagePath String?          @unique
+  url         String?
   category    String           @default("general")
   uploadedAt  DateTime         @default(now())
   isResource  Boolean          @default(false)

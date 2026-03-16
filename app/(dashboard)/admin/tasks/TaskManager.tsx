@@ -12,6 +12,7 @@ const TASK_TYPES: { value: TaskType; label: string; hint: string }[] = [
 interface ResourceDoc {
   id: string
   filename: string
+  url: string | null
 }
 
 interface Task {
@@ -21,7 +22,7 @@ interface Task {
   taskType: TaskType
   order: number
   resourceDocumentId: string | null
-  resourceDocument: ResourceDoc | null
+  resourceDocument: ResourceDoc | null  // ResourceDoc already includes url
 }
 
 interface TaskManagerProps {
@@ -244,14 +245,25 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin, resources }
                   {task.resourceDocument && (
                     <p className="text-xs mt-1">
                       <span className="text-gray-400">Resource: </span>
-                      <a
-                        href={`/api/documents/${task.resourceDocument.id}/download`}
-                        className="text-indigo-600 hover:underline"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {task.resourceDocument.filename}
-                      </a>
+                      {task.resourceDocument.url ? (
+                        <a
+                          href={task.resourceDocument.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-indigo-600 hover:underline"
+                        >
+                          {task.resourceDocument.filename}
+                        </a>
+                      ) : (
+                        <a
+                          href={`/api/documents/${task.resourceDocument.id}/download`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-indigo-600 hover:underline"
+                        >
+                          {task.resourceDocument.filename}
+                        </a>
+                      )}
                     </p>
                   )}
                 </div>
@@ -398,7 +410,7 @@ function TaskForm({
           >
             <option value="">— None —</option>
             {resources.map((r) => (
-              <option key={r.id} value={r.id}>{r.filename}</option>
+              <option key={r.id} value={r.id}>{r.url ? `[Link] ${r.filename}` : r.filename}</option>
             ))}
           </select>
         </div>

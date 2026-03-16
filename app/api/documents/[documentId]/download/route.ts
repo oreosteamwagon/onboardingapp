@@ -43,11 +43,16 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
   const document = await prisma.document.findUnique({
     where: { id: params.documentId },
-    select: { id: true, uploadedBy: true, filename: true, storagePath: true, isResource: true },
+    select: { id: true, uploadedBy: true, filename: true, storagePath: true, url: true, isResource: true },
   })
 
   if (!document) {
     return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+  }
+
+  // Web links are not downloadable files — the URL is surfaced directly in the UI.
+  if (document.url) {
+    return NextResponse.json({ error: 'This resource is a web link, not a downloadable file' }, { status: 400 })
   }
 
   const isUploader = session.user.id === document.uploadedBy
@@ -61,6 +66,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   // storagePath is a UUID+ext written by our own code. Validate it contains no
   // path separators as a defense-in-depth measure against DB tampering.
   if (
+    !document.storagePath ||
     document.storagePath.includes('/') ||
     document.storagePath.includes('\\') ||
     document.storagePath.includes('..')
@@ -69,7 +75,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
-  const filePath = join(UPLOAD_DIR, document.storagePath)
+  const filePath = join(UPLOAD_DIR, document.storagePath as string)
   let buffer: Buffer
   try {
     buffer = await readFile(filePath)
@@ -77,7 +83,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'File not found' }, { status: 404 })
   }
 
-  const ext = extname(document.storagePath).toLowerCase()
+  const ext = extname(document.storagePath as string).toLowerCase()
   const contentType = EXT_TO_MIME[ext] ?? 'application/octet-stream'
 
   // RFC 5987 encoded filename for Content-Disposition

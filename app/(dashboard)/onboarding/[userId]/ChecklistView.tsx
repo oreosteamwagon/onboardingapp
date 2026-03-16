@@ -26,6 +26,7 @@ interface TaskItem {
   attachments: AttachmentItem[]
   resourceDocumentId: string | null
   resourceDocumentFilename: string | null
+  resourceDocumentUrl: string | null
 }
 
 interface WorkflowGroup {
@@ -457,14 +458,25 @@ function StandardTaskItem({
         {task.resourceDocumentId && task.resourceDocumentFilename && (
           <p className="text-xs mt-1">
             <span className="text-gray-500">Resource: </span>
-            <a
-              href={`/api/documents/${task.resourceDocumentId}/download`}
-              className="text-indigo-600 hover:underline"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {task.resourceDocumentFilename}
-            </a>
+            {task.resourceDocumentUrl ? (
+              <a
+                href={task.resourceDocumentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-indigo-600 hover:underline"
+              >
+                {task.resourceDocumentFilename}
+              </a>
+            ) : (
+              <a
+                href={`/api/documents/${task.resourceDocumentId}/download`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-indigo-600 hover:underline"
+              >
+                {task.resourceDocumentFilename}
+              </a>
+            )}
           </p>
         )}
         {task.completed && task.completedAt && (
@@ -582,14 +594,25 @@ function UploadTaskItem({
         {task.resourceDocumentId && task.resourceDocumentFilename && (
           <p className="text-xs mt-1">
             <span className="text-gray-500">Resource: </span>
-            <a
-              href={`/api/documents/${task.resourceDocumentId}/download`}
-              className="text-indigo-600 hover:underline"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {task.resourceDocumentFilename}
-            </a>
+            {task.resourceDocumentUrl ? (
+              <a
+                href={task.resourceDocumentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-indigo-600 hover:underline"
+              >
+                {task.resourceDocumentFilename}
+              </a>
+            ) : (
+              <a
+                href={`/api/documents/${task.resourceDocumentId}/download`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-indigo-600 hover:underline"
+              >
+                {task.resourceDocumentFilename}
+              </a>
+            )}
           </p>
         )}
 

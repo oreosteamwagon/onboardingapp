@@ -45,10 +45,10 @@ export default function NavBar({ user }: NavBarProps) {
               </Link>
             )}
             <Link
-              href="/documents"
+              href="/resources"
               className="text-sm hover:text-white/80 transition-colors"
             >
-              Documents
+              Resources
             </Link>
             {canApprove && (
               <Link

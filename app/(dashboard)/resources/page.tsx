@@ -3,9 +3,9 @@ import { prisma } from '@/lib/db'
 import { redirect } from 'next/navigation'
 import { canUploadDocuments, canViewAllDocuments, canDeleteDocument } from '@/lib/permissions'
 import type { Role } from '@prisma/client'
-import DocumentsView from './DocumentsView'
+import ResourcesView from './ResourcesView'
 
-export default async function DocumentsPage() {
+export default async function ResourcesPage() {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
@@ -31,9 +31,10 @@ export default async function DocumentsPage() {
     }),
   ])
 
-  const docList = documents.map((d) => ({
+  const resourceList = documents.map((d) => ({
     id: d.id,
     filename: d.filename,
+    url: d.url ?? null,
     category: d.category,
     uploadedAt: d.uploadedAt.toISOString(),
     uploaderName: d.uploader.username,
@@ -42,8 +43,8 @@ export default async function DocumentsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Documents</h1>
-      <DocumentsView documents={docList} canUpload={canUpload} canDelete={canDelete} categories={categories} />
+      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Resources</h1>
+      <ResourcesView resources={resourceList} canUpload={canUpload} canDelete={canDelete} categories={categories} />
     </div>
   )
 }

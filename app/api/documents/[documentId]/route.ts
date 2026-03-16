@@ -47,32 +47,35 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Document not found' }, { status: 404 })
   }
 
-  // Defense-in-depth: storagePath must be a bare filename with no directory components.
-  // Our upload code writes UUID-based names, so separators or dots-only sequences
-  // should never appear. Reject anything suspicious to prevent path traversal via
-  // a tampered DB record.
-  if (
-    document.storagePath.includes('/') ||
-    document.storagePath.includes('\\') ||
-    document.storagePath.includes('..')
-  ) {
-    console.error('Suspicious storagePath blocked during delete, documentId:', document.id)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
-
-  // Delete the file from disk first. If it is already gone (ENOENT), log and
-  // continue — the DB record should still be cleaned up. Any other filesystem
-  // error is unexpected; abort to avoid leaving an orphaned DB record.
-  const filePath = join(UPLOAD_DIR, document.storagePath)
-  try {
-    await unlink(filePath)
-  } catch (err) {
-    const nodeErr = err as NodeJS.ErrnoException
-    if (nodeErr.code !== 'ENOENT') {
-      console.error('Failed to delete document file, documentId:', document.id, err)
+  // Web links have no file on disk — skip filesystem operations entirely.
+  if (document.storagePath !== null) {
+    // Defense-in-depth: storagePath must be a bare filename with no directory components.
+    // Our upload code writes UUID-based names, so separators or dots-only sequences
+    // should never appear. Reject anything suspicious to prevent path traversal via
+    // a tampered DB record.
+    if (
+      document.storagePath.includes('/') ||
+      document.storagePath.includes('\\') ||
+      document.storagePath.includes('..')
+    ) {
+      console.error('Suspicious storagePath blocked during delete, documentId:', document.id)
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
-    console.warn('Document file already missing on disk, proceeding with DB delete, documentId:', document.id)
+
+    // Delete the file from disk first. If it is already gone (ENOENT), log and
+    // continue — the DB record should still be cleaned up. Any other filesystem
+    // error is unexpected; abort to avoid leaving an orphaned DB record.
+    const filePath = join(UPLOAD_DIR, document.storagePath)
+    try {
+      await unlink(filePath)
+    } catch (err) {
+      const nodeErr = err as NodeJS.ErrnoException
+      if (nodeErr.code !== 'ENOENT') {
+        console.error('Failed to delete document file, documentId:', document.id, err)
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+      }
+      console.warn('Document file already missing on disk, proceeding with DB delete, documentId:', document.id)
+    }
   }
 
   await prisma.document.delete({ where: { id: document.id } })

@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canUploadDocuments, canViewAllDocuments } from '@/lib/permissions'
 import { saveUpload, UploadError } from '@/lib/upload'
+import { checkUploadRateLimit } from '@/lib/ratelimit'
+import { validateTitle, validateWebLinkUrl } from '@/lib/validation'
 import type { Role } from '@prisma/client'
 
 export async function GET(req: NextRequest) {
@@ -36,6 +38,7 @@ export async function GET(req: NextRequest) {
     documents.map((d) => ({
       id: d.id,
       filename: d.filename,
+      url: d.url ?? null,
       category: d.category,
       uploadedAt: d.uploadedAt.toISOString(),
       uploaderName: d.uploader.username,
@@ -57,6 +60,68 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  try {
+    await checkUploadRateLimit(session.user.id)
+  } catch {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
+  const contentType = req.headers.get('content-type') ?? ''
+
+  // Web link branch
+  if (contentType.includes('application/json')) {
+    let body: unknown
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    }
+
+    const { title, url, category } = body as Record<string, unknown>
+
+    const titleError = validateTitle(title)
+    if (titleError) return NextResponse.json({ error: titleError }, { status: 400 })
+
+    const urlError = validateWebLinkUrl(url)
+    if (urlError) return NextResponse.json({ error: urlError }, { status: 400 })
+
+    const categoryStr = typeof category === 'string' ? category.trim() : ''
+    if (!categoryStr) return NextResponse.json({ error: 'category is required' }, { status: 400 })
+    const categoryRecord = await prisma.documentCategory.findUnique({
+      where: { slug: categoryStr },
+      select: { id: true },
+    })
+    if (!categoryRecord) return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
+
+    const doc = await prisma.document.create({
+      data: {
+        uploadedBy: session.user.id,
+        filename: (title as string).trim(),
+        url: (url as string).trim(),
+        storagePath: null,
+        category: categoryStr,
+        isResource: true,
+      },
+      include: {
+        uploader: { select: { username: true } },
+      },
+    })
+
+    return NextResponse.json(
+      {
+        id: doc.id,
+        filename: doc.filename,
+        url: doc.url,
+        category: doc.category,
+        uploadedAt: doc.uploadedAt.toISOString(),
+        uploaderName: doc.uploader.username,
+        isResource: doc.isResource,
+      },
+      { status: 201 },
+    )
+  }
+
+  // File upload branch
   let formData: FormData
   try {
     formData = await req.formData()
@@ -113,6 +178,7 @@ export async function POST(req: NextRequest) {
     {
       id: doc.id,
       filename: doc.filename,
+      url: null,
       category: doc.category,
       uploadedAt: doc.uploadedAt.toISOString(),
       uploaderName: doc.uploader.username,

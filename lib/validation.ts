@@ -107,6 +107,21 @@ export function validateCategoryName(v: unknown): string | null {
   return null
 }
 
+const WEB_LINK_URL_RE = /^https:\/\/.{1,2041}$/
+
+export function validateWebLinkUrl(v: unknown): string | null {
+  if (typeof v !== 'string') return 'url must be a string'
+  const trimmed = v.trim()
+  if (!WEB_LINK_URL_RE.test(trimmed)) return 'url must start with https:// and be at most 2048 characters'
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.protocol !== 'https:') return 'url must use https'
+  } catch {
+    return 'url is not a valid URL'
+  }
+  return null
+}
+
 export function categoryNameToSlug(name: string): string {
   return name.trim().toLowerCase()
     .replace(/&/g, 'and')

@@ -20,13 +20,13 @@ export default async function AdminTasksPage() {
   const tasks = await prisma.onboardingTask.findMany({
     orderBy: { order: 'asc' },
     include: {
-      resourceDocument: { select: { id: true, filename: true } },
+      resourceDocument: { select: { id: true, filename: true, url: true } },
     },
   })
 
   const resources = await prisma.document.findMany({
     where: { isResource: true },
-    select: { id: true, filename: true },
+    select: { id: true, filename: true, url: true },
     orderBy: { uploadedAt: 'desc' },
   })
 

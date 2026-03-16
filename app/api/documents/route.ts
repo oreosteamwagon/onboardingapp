@@ -5,8 +5,6 @@ import { canUploadDocuments, canViewAllDocuments } from '@/lib/permissions'
 import { saveUpload, UploadError } from '@/lib/upload'
 import type { Role } from '@prisma/client'
 
-const VALID_CATEGORIES = ['general', 'policy', 'benefits', 'onboarding']
-
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
@@ -73,10 +71,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
 
-  const categoryStr = typeof category === 'string' ? category : 'general'
-  if (!VALID_CATEGORIES.includes(categoryStr)) {
-    return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
-  }
+  const categoryStr = typeof category === 'string' ? category.trim() : ''
+  if (!categoryStr) return NextResponse.json({ error: 'category is required' }, { status: 400 })
+  const categoryRecord = await prisma.documentCategory.findUnique({
+    where: { slug: categoryStr },
+    select: { id: true },
+  })
+  if (!categoryRecord) return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
 
   const buffer = Buffer.from(await file.arrayBuffer())
 

@@ -94,3 +94,24 @@ export function validatePositionCode(v: unknown): string | null {
   }
   return null
 }
+
+// Letters (basic Latin + Latin Extended), digits, spaces, hyphens, ampersands
+// 2-64 chars, required
+const CATEGORY_NAME_RE = /^[a-zA-Z0-9\u00C0-\u024F &\-]{2,64}$/
+
+export function validateCategoryName(v: unknown): string | null {
+  if (typeof v !== 'string') return 'name must be a string'
+  const trimmed = v.trim()
+  if (!CATEGORY_NAME_RE.test(trimmed))
+    return 'name must be 2-64 characters: letters, digits, spaces, hyphens, ampersands'
+  return null
+}
+
+export function categoryNameToSlug(name: string): string {
+  return name.trim().toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9\-]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '')
+}

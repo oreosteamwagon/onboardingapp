@@ -21,11 +21,12 @@ export default function AdminNav({ role }: AdminNavProps) {
   const canWorkflows = role === 'HR' || role === 'ADMIN'
 
   const tabs: Tab[] = [
-    { href: '/admin/tasks',     label: 'Tasks',     show: true },
-    { href: '/admin/workflows', label: 'Workflows', show: canWorkflows },
-    { href: '/admin/users',     label: 'Users',     show: isAdmin },
-    { href: '/admin/branding',  label: 'Branding',  show: isAdmin },
-    { href: '/admin/reset',     label: 'Reset',     show: isAdmin, danger: true },
+    { href: '/admin/tasks',               label: 'Tasks',      show: true },
+    { href: '/admin/workflows',           label: 'Workflows',  show: canWorkflows },
+    { href: '/admin/users',               label: 'Users',      show: isAdmin },
+    { href: '/admin/branding',            label: 'Branding',   show: isAdmin },
+    { href: '/admin/document-categories', label: 'Categories', show: isAdmin },
+    { href: '/admin/reset',               label: 'Reset',      show: isAdmin, danger: true },
   ]
 
   return (

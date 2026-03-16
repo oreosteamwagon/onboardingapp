@@ -75,7 +75,9 @@ export async function POST(req: NextRequest) {
       await tx.onboardingTask.deleteMany({})
       // 6. Workflow (workflowTasks and userWorkflows cleared above)
       await tx.workflow.deleteMany({})
-      // 7. Non-admin users (all referencing records cleared above)
+      // 7. Custom document categories; built-ins are preserved and re-seeded on restart
+      await tx.documentCategory.deleteMany({ where: { isBuiltIn: false } })
+      // 8. Non-admin users (all referencing records cleared above)
       await tx.user.deleteMany({ where: { role: { not: 'ADMIN' } } })
     })
   } catch (err) {

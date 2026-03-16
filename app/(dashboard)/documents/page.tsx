@@ -17,13 +17,19 @@ export default async function DocumentsPage() {
     ? {}
     : { uploadedBy: session.user.id }
 
-  const documents = await prisma.document.findMany({
-    where: visibilityFilter,
-    orderBy: { uploadedAt: 'desc' },
-    include: {
-      uploader: { select: { username: true } },
-    },
-  })
+  const [documents, categories] = await Promise.all([
+    prisma.document.findMany({
+      where: visibilityFilter,
+      orderBy: { uploadedAt: 'desc' },
+      include: {
+        uploader: { select: { username: true } },
+      },
+    }),
+    prisma.documentCategory.findMany({
+      orderBy: [{ isBuiltIn: 'desc' }, { name: 'asc' }],
+      select: { id: true, slug: true, name: true },
+    }),
+  ])
 
   const docList = documents.map((d) => ({
     id: d.id,
@@ -37,7 +43,7 @@ export default async function DocumentsPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-gray-900 mb-6">Documents</h1>
-      <DocumentsView documents={docList} canUpload={canUpload} canDelete={canDelete} />
+      <DocumentsView documents={docList} canUpload={canUpload} canDelete={canDelete} categories={categories} />
     </div>
   )
 }

@@ -41,6 +41,10 @@ export function canManageBranding(role: Role): boolean {
   return role === Role.ADMIN
 }
 
+export function canManageDocumentCategories(role: Role): boolean {
+  return role === Role.ADMIN
+}
+
 // Any authenticated user may upload a document to complete an UPLOAD-type onboarding task
 // assigned via their workflow. Access is governed by workflow membership, NOT by
 // canUploadDocuments (which gates general document uploads to HR+).

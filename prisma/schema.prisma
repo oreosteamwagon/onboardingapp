@@ -62,6 +62,17 @@ model BrandingSetting {
   updatedAt    DateTime @updatedAt
 }
 
+model DocumentCategory {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  isBuiltIn Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([slug])
+  @@index([name])
+}
+
 model OnboardingTask {
   id                 String         @id @default(cuid())
   title              String

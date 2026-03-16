@@ -12,21 +12,29 @@ interface Doc {
   isResource: boolean
 }
 
+interface Category {
+  id: string
+  slug: string
+  name: string
+}
+
 interface DocumentsViewProps {
   documents: Doc[]
   canUpload: boolean
   canDelete: boolean
+  categories: Category[]
 }
 
 export default function DocumentsView({
   documents: initial,
   canUpload,
   canDelete,
+  categories,
 }: DocumentsViewProps) {
   const router = useRouter()
   const [documents, setDocuments] = useState(initial)
   const [file, setFile] = useState<File | null>(null)
-  const [category, setCategory] = useState('general')
+  const [category, setCategory] = useState(categories[0]?.slug ?? 'general')
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   // documentId currently showing inline delete confirmation
@@ -125,10 +133,9 @@ export default function DocumentsView({
               onChange={(e) => setCategory(e.target.value)}
               className="rounded-md border border-gray-300 px-3 py-2 text-sm"
             >
-              <option value="general">General</option>
-              <option value="policy">Policy</option>
-              <option value="benefits">Benefits</option>
-              <option value="onboarding">Onboarding</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.slug}>{c.name}</option>
+              ))}
             </select>
           </div>
           <button

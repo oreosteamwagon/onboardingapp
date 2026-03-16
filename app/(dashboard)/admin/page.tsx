@@ -48,6 +48,12 @@ export default async function AdminPage() {
       show: isAdmin,
     },
     {
+      href: '/admin/document-categories',
+      label: 'Categories',
+      description: 'Manage document categories available when uploading documents.',
+      show: isAdmin,
+    },
+    {
       href: '/admin/reset',
       label: 'Reset',
       description: 'Factory reset — restores the application to its initial seeded state.',

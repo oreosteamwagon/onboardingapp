@@ -143,3 +143,10 @@ const logoLimiter = new RateLimiterMemory({
 export async function checkLogoRateLimit(ip: string): Promise<void> {
   await logoLimiter.consume(ip)
 }
+
+// 20 category management operations per minute per ADMIN
+const categoryMgmtLimiter = new RateLimiterMemory({ points: 20, duration: 60, blockDuration: 60 })
+
+export async function checkCategoryMgmtRateLimit(userId: string): Promise<void> {
+  await categoryMgmtLimiter.consume(userId)
+}

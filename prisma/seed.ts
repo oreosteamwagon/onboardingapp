@@ -37,6 +37,22 @@ async function main() {
   })
 
   console.log('Seeded default branding')
+
+  const BUILTIN_CATEGORIES = [
+    { id: 'builtin-general',    slug: 'general',    name: 'General' },
+    { id: 'builtin-policy',     slug: 'policy',     name: 'Policy' },
+    { id: 'builtin-benefits',   slug: 'benefits',   name: 'Benefits' },
+    { id: 'builtin-onboarding', slug: 'onboarding', name: 'Onboarding' },
+  ]
+  for (const cat of BUILTIN_CATEGORIES) {
+    await prisma.documentCategory.upsert({
+      where: { id: cat.id },
+      update: {},
+      create: { id: cat.id, slug: cat.slug, name: cat.name, isBuiltIn: true },
+    })
+  }
+
+  console.log('Seeded built-in document categories')
 }
 
 main()

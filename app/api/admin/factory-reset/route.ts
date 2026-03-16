@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
   const docs = await prisma.document.findMany({
     select: { storagePath: true },
   })
-  const storagePaths = docs.map((d) => d.storagePath)
+  const storagePaths = docs.map((d) => d.storagePath).filter((p): p is string => p !== null)
 
   try {
     await prisma.$transaction(async (tx) => {

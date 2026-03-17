@@ -63,21 +63,27 @@ export async function POST(req: NextRequest) {
   try {
     await prisma.$transaction(async (tx) => {
       // Delete in FK dependency order: dependents first, then parents.
-      // 1. UserTask references User, OnboardingTask, Document
+      // 1. TaskAttachment references UserTask and User
+      await tx.taskAttachment.deleteMany({})
+      // 2. UserTask references User, OnboardingTask, Document
       await tx.userTask.deleteMany({})
-      // 2. UserWorkflow references User, Workflow
+      // 3. CourseAttempt references User, Course, OnboardingTask
+      await tx.courseAttempt.deleteMany({})
+      // 4. UserWorkflow references User, Workflow
       await tx.userWorkflow.deleteMany({})
-      // 3. WorkflowTask references Workflow, OnboardingTask
+      // 5. WorkflowTask references Workflow, OnboardingTask
       await tx.workflowTask.deleteMany({})
-      // 4. Document references User (UserTask FK already removed above)
+      // 6. Document references User (UserTask FK already removed above)
       await tx.document.deleteMany({})
-      // 5. OnboardingTask (userTasks and workflowTasks cleared above)
+      // 7. OnboardingTask (userTasks, workflowTasks, courseAttempts cleared above)
       await tx.onboardingTask.deleteMany({})
-      // 6. Workflow (workflowTasks and userWorkflows cleared above)
+      // 8. Course (cascade deletes CourseQuestion and CourseAnswer)
+      await tx.course.deleteMany({})
+      // 9. Workflow (workflowTasks and userWorkflows cleared above)
       await tx.workflow.deleteMany({})
-      // 7. Custom document categories; built-ins are preserved and re-seeded on restart
+      // 10. Custom document categories; built-ins are preserved and re-seeded on restart
       await tx.documentCategory.deleteMany({ where: { isBuiltIn: false } })
-      // 8. Non-admin users (all referencing records cleared above)
+      // 11. Non-admin users (all referencing records cleared above)
       await tx.user.deleteMany({ where: { role: { not: 'ADMIN' } } })
     })
   } catch (err) {

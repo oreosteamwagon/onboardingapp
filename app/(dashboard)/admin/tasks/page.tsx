@@ -21,6 +21,7 @@ export default async function AdminTasksPage() {
     orderBy: { order: 'asc' },
     include: {
       resourceDocument: { select: { id: true, filename: true, url: true } },
+      course: { select: { id: true, title: true } },
     },
   })
 
@@ -28,6 +29,11 @@ export default async function AdminTasksPage() {
     where: { isResource: true },
     select: { id: true, filename: true, url: true },
     orderBy: { uploadedAt: 'desc' },
+  })
+
+  const courses = await prisma.course.findMany({
+    select: { id: true, title: true },
+    orderBy: { title: 'asc' },
   })
 
   return (
@@ -45,9 +51,12 @@ export default async function AdminTasksPage() {
           order: t.order,
           resourceDocumentId: t.resourceDocumentId,
           resourceDocument: t.resourceDocument,
+          courseId: t.courseId,
+          course: t.course,
         }))}
         viewerIsAdmin={isAdmin(session.user.role as Role)}
         resources={resources}
+        courses={courses}
       />
     </div>
   )

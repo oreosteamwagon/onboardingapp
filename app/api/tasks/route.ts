@@ -27,6 +27,7 @@ export async function GET() {
     orderBy: { order: 'asc' },
     include: {
       resourceDocument: { select: { id: true, filename: true } },
+      course: { select: { id: true, title: true } },
     },
   })
 
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { title, description, taskType, order, resourceDocumentId } = body as Record<string, unknown>
+  const { title, description, taskType, order, resourceDocumentId, courseId } = body as Record<string, unknown>
 
   const titleErr = validateTitle(title)
   if (titleErr) return NextResponse.json({ error: titleErr }, { status: 400 })
@@ -72,6 +73,8 @@ export async function POST(req: NextRequest) {
 
   const typeErr = validateTaskType(taskType)
   if (typeErr) return NextResponse.json({ error: typeErr }, { status: 400 })
+
+  const resolvedType = (taskType as TaskType | undefined) ?? 'STANDARD'
 
   let resolvedResourceDocumentId: string | null = null
   if (resourceDocumentId != null) {
@@ -88,16 +91,36 @@ export async function POST(req: NextRequest) {
     resolvedResourceDocumentId = resourceDocumentId as string
   }
 
+  let resolvedCourseId: string | null = null
+  if (courseId != null) {
+    if (resolvedType !== 'LEARNING') {
+      return NextResponse.json({ error: 'courseId is only valid for LEARNING tasks' }, { status: 400 })
+    }
+    const cuidErr = validateCuid(courseId, 'courseId')
+    if (cuidErr) return NextResponse.json({ error: cuidErr }, { status: 400 })
+
+    const course = await prisma.course.findUnique({
+      where: { id: courseId as string },
+      select: { id: true },
+    })
+    if (!course) {
+      return NextResponse.json({ error: 'courseId must reference an existing course' }, { status: 400 })
+    }
+    resolvedCourseId = courseId as string
+  }
+
   const task = await prisma.onboardingTask.create({
     data: {
       title: (title as string).trim(),
       description: typeof description === 'string' ? description.trim() : null,
-      taskType: (taskType as TaskType | undefined) ?? 'STANDARD',
+      taskType: resolvedType,
       order: validateOrder(order),
       resourceDocumentId: resolvedResourceDocumentId,
+      courseId: resolvedCourseId,
     },
     include: {
       resourceDocument: { select: { id: true, filename: true } },
+      course: { select: { id: true, title: true } },
     },
   })
 
@@ -152,6 +175,14 @@ export async function PATCH(req: NextRequest) {
   if (task.taskType === 'UPLOAD') {
     return NextResponse.json(
       { error: 'UPLOAD tasks must be completed by uploading a file' },
+      { status: 409 },
+    )
+  }
+
+  // LEARNING tasks are completed by taking the associated course
+  if (task.taskType === 'LEARNING') {
+    return NextResponse.json(
+      { error: 'LEARNING tasks are completed by taking the associated course' },
       { status: 409 },
     )
   }

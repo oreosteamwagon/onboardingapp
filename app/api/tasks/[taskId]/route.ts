@@ -34,7 +34,10 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
   const task = await prisma.onboardingTask.findUnique({
     where: { id: taskId },
-    include: { resourceDocument: { select: { id: true, filename: true } } },
+    include: {
+      resourceDocument: { select: { id: true, filename: true } },
+      course: { select: { id: true, title: true } },
+    },
   })
   if (!task) {
     return NextResponse.json({ error: 'Task not found' }, { status: 404 })
@@ -82,14 +85,15 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { title, description, taskType, order, resourceDocumentId } = body as Record<string, unknown>
+  const { title, description, taskType, order, resourceDocumentId, courseId } = body as Record<string, unknown>
 
   if (
     title === undefined &&
     description === undefined &&
     taskType === undefined &&
     order === undefined &&
-    !('resourceDocumentId' in (body as object))
+    !('resourceDocumentId' in (body as object)) &&
+    !('courseId' in (body as object))
   ) {
     return NextResponse.json({ error: 'No fields provided to update' }, { status: 400 })
   }
@@ -108,6 +112,9 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     const err = validateTaskType(taskType)
     if (err) return NextResponse.json({ error: err }, { status: 400 })
   }
+
+  // Resolve the effective task type for cross-field validation
+  const effectiveType = (taskType ?? existing.taskType) as TaskType
 
   let resolvedResourceDocumentId: string | null | undefined = undefined
   if ('resourceDocumentId' in (body as object)) {
@@ -128,6 +135,28 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     }
   }
 
+  let resolvedCourseId: string | null | undefined = undefined
+  if ('courseId' in (body as object)) {
+    if (courseId === null) {
+      resolvedCourseId = null
+    } else {
+      if (effectiveType !== 'LEARNING') {
+        return NextResponse.json({ error: 'courseId is only valid for LEARNING tasks' }, { status: 400 })
+      }
+      const cuidErr = validateCuid(courseId, 'courseId')
+      if (cuidErr) return NextResponse.json({ error: cuidErr }, { status: 400 })
+
+      const course = await prisma.course.findUnique({
+        where: { id: courseId as string },
+        select: { id: true },
+      })
+      if (!course) {
+        return NextResponse.json({ error: 'courseId must reference an existing course' }, { status: 400 })
+      }
+      resolvedCourseId = courseId as string
+    }
+  }
+
   const task = await prisma.onboardingTask.update({
     where: { id: taskId },
     data: {
@@ -138,9 +167,11 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
       ...(taskType !== undefined && { taskType: taskType as TaskType }),
       ...(order !== undefined && { order: validateOrder(order) }),
       ...(resolvedResourceDocumentId !== undefined && { resourceDocumentId: resolvedResourceDocumentId }),
+      ...(resolvedCourseId !== undefined && { courseId: resolvedCourseId }),
     },
     include: {
       resourceDocument: { select: { id: true, filename: true } },
+      course: { select: { id: true, title: true } },
     },
   })
 

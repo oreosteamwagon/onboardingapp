@@ -150,3 +150,21 @@ const categoryMgmtLimiter = new RateLimiterMemory({ points: 20, duration: 60, bl
 export async function checkCategoryMgmtRateLimit(userId: string): Promise<void> {
   await categoryMgmtLimiter.consume(userId)
 }
+
+// 30 course authoring operations per minute per user (HR+ only)
+const courseMgmtLimiter = new RateLimiterMemory({ points: 30, duration: 60, blockDuration: 60 })
+export async function checkCourseMgmtRateLimit(userId: string): Promise<void> {
+  await courseMgmtLimiter.consume(userId)
+}
+
+// 20 quiz attempts per hour per user — prevents brute-forcing correct answers
+const courseAttemptLimiter = new RateLimiterMemory({ points: 20, duration: 3600, blockDuration: 3600 })
+export async function checkCourseAttemptRateLimit(userId: string): Promise<void> {
+  await courseAttemptLimiter.consume(userId)
+}
+
+// 60 certificate views per minute per user
+const certificateLimiter = new RateLimiterMemory({ points: 60, duration: 60, blockDuration: 60 })
+export async function checkCertificateRateLimit(userId: string): Promise<void> {
+  await certificateLimiter.consume(userId)
+}

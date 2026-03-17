@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import Link from 'next/link'
 import type { TaskType, ApprovalStatus } from '@prisma/client'
 
 interface AttachmentItem {
@@ -27,6 +28,12 @@ interface TaskItem {
   resourceDocumentId: string | null
   resourceDocumentFilename: string | null
   resourceDocumentUrl: string | null
+  courseId: string | null
+  courseTitle: string | null
+  courseAttemptCount: number
+  bestScore: number | null
+  coursePassed: boolean
+  latestPassedAttemptId: string | null
 }
 
 interface WorkflowGroup {
@@ -239,7 +246,13 @@ export default function ChecklistView({
           ) : (
             <ul className="space-y-3">
               {group.tasks.map((task) =>
-                task.taskType === 'UPLOAD' ? (
+                task.taskType === 'LEARNING' ? (
+                  <LearningTaskItem
+                    key={task.id}
+                    task={task}
+                    isOwnPage={isOwnPage}
+                  />
+                ) : task.taskType === 'UPLOAD' ? (
                   <UploadTaskItem
                     key={task.id}
                     task={task}
@@ -390,6 +403,78 @@ function AttachmentsSection({
         </div>
       )}
     </div>
+  )
+}
+
+// ---- LEARNING task item ----
+
+function LearningTaskItem({
+  task,
+  isOwnPage,
+}: {
+  task: TaskItem
+  isOwnPage: boolean
+}) {
+  return (
+    <li className={`bg-white rounded-lg shadow px-6 py-4 flex items-start gap-4 ${task.completed ? 'opacity-70' : ''}`}>
+      <div className="mt-1 h-4 w-4 shrink-0 flex items-center justify-center">
+        {task.completed ? (
+          <svg className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        ) : (
+          <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-2 mb-0.5">
+          <p className={`text-sm font-medium ${task.completed ? 'text-gray-400' : 'text-gray-900'}`}>
+            {task.title}
+          </p>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+            Learning Course
+          </span>
+          {task.completed && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              Passed
+            </span>
+          )}
+        </div>
+        {task.courseTitle && (
+          <p className="text-xs text-gray-500 mt-0.5">{task.courseTitle}</p>
+        )}
+        {task.description && (
+          <p className="text-sm text-gray-500 mt-0.5">{task.description}</p>
+        )}
+        {task.courseAttemptCount > 0 && (
+          <p className="text-xs text-gray-400 mt-1">
+            {task.courseAttemptCount} attempt{task.courseAttemptCount !== 1 ? 's' : ''}
+            {task.bestScore !== null && <span> &middot; Best score: {task.bestScore}%</span>}
+          </p>
+        )}
+        <div className="mt-2 flex gap-3">
+          {task.completed && task.latestPassedAttemptId ? (
+            <Link
+              href={`/certificate/${task.latestPassedAttemptId}`}
+              className="text-xs text-indigo-600 hover:underline"
+            >
+              View Certificate
+            </Link>
+          ) : isOwnPage && task.courseId ? (
+            <Link
+              href={`/learn/${task.courseId}`}
+              className="inline-block rounded-md bg-indigo-600 text-white px-3 py-1 text-xs font-medium hover:bg-indigo-700 transition-colors"
+            >
+              {task.courseAttemptCount > 0 ? 'Retry Course' : 'Start Course'}
+            </Link>
+          ) : !isOwnPage && !task.completed ? (
+            <span className="text-xs text-gray-400">Not yet completed</span>
+          ) : null}
+        </div>
+      </div>
+    </li>
   )
 }
 

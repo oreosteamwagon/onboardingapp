@@ -25,11 +25,15 @@ jest.mock('@/lib/db', () => ({
   prisma: {
     $transaction: mockTransaction,
     document: { findMany: mockDocumentFindMany, deleteMany: mockDeleteMany },
+    taskAttachment: { deleteMany: mockDeleteMany },
     userTask: { deleteMany: mockDeleteMany },
+    courseAttempt: { deleteMany: mockDeleteMany },
     userWorkflow: { deleteMany: mockDeleteMany },
     workflowTask: { deleteMany: mockDeleteMany },
     onboardingTask: { deleteMany: mockDeleteMany },
+    course: { deleteMany: mockDeleteMany },
     workflow: { deleteMany: mockDeleteMany },
+    documentCategory: { deleteMany: mockDeleteMany },
     user: { deleteMany: mockDeleteMany },
   },
 }))
@@ -202,49 +206,22 @@ describe('POST /api/admin/factory-reset — deletion order', () => {
     mockAuth.mockResolvedValueOnce(makeSession('ADMIN') as never)
 
     const callOrder: string[] = []
+    const mkTrack = (name: string) => jest.fn().mockImplementation(() => {
+      callOrder.push(name)
+      return Promise.resolve({ count: 0 })
+    })
     const trackingTx = {
-      userTask: {
-        deleteMany: jest.fn().mockImplementation(() => {
-          callOrder.push('userTask')
-          return Promise.resolve({ count: 0 })
-        }),
-      },
-      userWorkflow: {
-        deleteMany: jest.fn().mockImplementation(() => {
-          callOrder.push('userWorkflow')
-          return Promise.resolve({ count: 0 })
-        }),
-      },
-      workflowTask: {
-        deleteMany: jest.fn().mockImplementation(() => {
-          callOrder.push('workflowTask')
-          return Promise.resolve({ count: 0 })
-        }),
-      },
-      document: {
-        deleteMany: jest.fn().mockImplementation(() => {
-          callOrder.push('document')
-          return Promise.resolve({ count: 0 })
-        }),
-      },
-      onboardingTask: {
-        deleteMany: jest.fn().mockImplementation(() => {
-          callOrder.push('onboardingTask')
-          return Promise.resolve({ count: 0 })
-        }),
-      },
-      workflow: {
-        deleteMany: jest.fn().mockImplementation(() => {
-          callOrder.push('workflow')
-          return Promise.resolve({ count: 0 })
-        }),
-      },
-      user: {
-        deleteMany: jest.fn().mockImplementation(() => {
-          callOrder.push('user')
-          return Promise.resolve({ count: 0 })
-        }),
-      },
+      taskAttachment: { deleteMany: mkTrack('taskAttachment') },
+      userTask: { deleteMany: mkTrack('userTask') },
+      courseAttempt: { deleteMany: mkTrack('courseAttempt') },
+      userWorkflow: { deleteMany: mkTrack('userWorkflow') },
+      workflowTask: { deleteMany: mkTrack('workflowTask') },
+      document: { deleteMany: mkTrack('document') },
+      onboardingTask: { deleteMany: mkTrack('onboardingTask') },
+      course: { deleteMany: mkTrack('course') },
+      workflow: { deleteMany: mkTrack('workflow') },
+      documentCategory: { deleteMany: mkTrack('documentCategory') },
+      user: { deleteMany: mkTrack('user') },
     }
     mockTransaction.mockImplementationOnce(
       (fn: (tx: typeof trackingTx) => Promise<unknown>) => fn(trackingTx),
@@ -253,12 +230,16 @@ describe('POST /api/admin/factory-reset — deletion order', () => {
     await POST(makeRequest(VALID_BODY))
 
     expect(callOrder).toEqual([
+      'taskAttachment',
       'userTask',
+      'courseAttempt',
       'userWorkflow',
       'workflowTask',
       'document',
       'onboardingTask',
+      'course',
       'workflow',
+      'documentCategory',
       'user',
     ])
   })
@@ -267,13 +248,18 @@ describe('POST /api/admin/factory-reset — deletion order', () => {
     mockAuth.mockResolvedValueOnce(makeSession('ADMIN') as never)
 
     let userDeleteArgs: unknown
+    const noop = jest.fn().mockResolvedValue({ count: 0 })
     const trackingTx = {
-      userTask: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-      userWorkflow: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-      workflowTask: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-      document: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-      onboardingTask: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-      workflow: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      taskAttachment: { deleteMany: noop },
+      userTask: { deleteMany: noop },
+      courseAttempt: { deleteMany: noop },
+      userWorkflow: { deleteMany: noop },
+      workflowTask: { deleteMany: noop },
+      document: { deleteMany: noop },
+      onboardingTask: { deleteMany: noop },
+      course: { deleteMany: noop },
+      workflow: { deleteMany: noop },
+      documentCategory: { deleteMany: noop },
       user: {
         deleteMany: jest.fn().mockImplementation((args: unknown) => {
           userDeleteArgs = args

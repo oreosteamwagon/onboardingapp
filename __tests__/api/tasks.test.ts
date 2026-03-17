@@ -32,6 +32,12 @@ jest.mock('@/lib/db', () => ({
     workflowTask: {
       findFirst: jest.fn(),
     },
+    course: {
+      findUnique: jest.fn(),
+    },
+    document: {
+      findUnique: jest.fn(),
+    },
   },
 }))
 jest.mock('@/lib/ratelimit', () => ({
@@ -221,6 +227,35 @@ describe('POST /api/tasks', () => {
     const res = await POST(req)
     expect(res.status).toBe(400)
   })
+
+  it('creates a LEARNING task with valid courseId and returns 201', async () => {
+    mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
+    ;(prisma.course.findUnique as jest.Mock).mockResolvedValueOnce({ id: 'course-1' })
+    const learningTask = { ...sampleTask, taskType: 'LEARNING' as const, courseId: 'course-1' }
+    mockCreate.mockResolvedValueOnce(learningTask as never)
+    const cuid = 'c' + 'a'.repeat(24)
+    const res = await POST(makeRequest({ title: 'Safety Training', taskType: 'LEARNING', courseId: cuid }))
+    expect(res.status).toBe(201)
+  })
+
+  it('returns 400 when courseId is provided for non-LEARNING task', async () => {
+    mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
+    const cuid = 'c' + 'a'.repeat(24)
+    const res = await POST(makeRequest({ title: 'Sign NDA', taskType: 'STANDARD', courseId: cuid }))
+    expect(res.status).toBe(400)
+    const data = await res.json()
+    expect(data.error).toMatch(/courseId/)
+  })
+
+  it('returns 400 when courseId references non-existent course', async () => {
+    mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
+    ;(prisma.course.findUnique as jest.Mock).mockResolvedValueOnce(null)
+    const cuid = 'c' + 'a'.repeat(24)
+    const res = await POST(makeRequest({ title: 'Safety Training', taskType: 'LEARNING', courseId: cuid }))
+    expect(res.status).toBe(400)
+    const data = await res.json()
+    expect(data.error).toMatch(/course/)
+  })
 })
 
 // ============================================================
@@ -275,6 +310,17 @@ describe('PATCH /api/tasks', () => {
       makeRequest({ userId: 'user-1', taskId: 'task-1', completed: false }, 'PATCH'),
     )
     expect(res.status).toBe(409)
+  })
+
+  it('returns 409 for LEARNING task type — must be completed via course take', async () => {
+    mockAuth.mockResolvedValueOnce(makeSession('USER', 'user-1') as never)
+    mockFindUnique.mockResolvedValueOnce({ taskType: 'LEARNING' } as never)
+    const res = await PATCH(
+      makeRequest({ userId: 'user-1', taskId: 'task-1', completed: true }, 'PATCH'),
+    )
+    expect(res.status).toBe(409)
+    const data = await res.json()
+    expect(data.error).toMatch(/LEARNING/i)
   })
 
   it('returns 403 when task is not in any workflow assigned to user', async () => {
@@ -512,6 +558,7 @@ describe('validateDescription', () => {
 describe('validateTaskType', () => {
   it('accepts STANDARD', () => expect(validateTaskType('STANDARD')).toBeNull())
   it('accepts UPLOAD', () => expect(validateTaskType('UPLOAD')).toBeNull())
+  it('accepts LEARNING', () => expect(validateTaskType('LEARNING')).toBeNull())
   it('accepts undefined (defaults applied by caller)', () =>
     expect(validateTaskType(undefined)).toBeNull())
   it('rejects unknown type', () => expect(validateTaskType('CHECKBOX')).not.toBeNull())

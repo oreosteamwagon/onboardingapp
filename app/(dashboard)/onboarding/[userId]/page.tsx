@@ -64,7 +64,10 @@ export default async function OnboardingPage({ params }: PageProps) {
           tasks: {
             include: {
               task: {
-                include: { resourceDocument: { select: { id: true, filename: true, url: true } } },
+                include: {
+                  resourceDocument: { select: { id: true, filename: true, url: true } },
+                  course: { select: { id: true, title: true } },
+                },
               },
             },
             orderBy: { order: 'asc' },
@@ -77,6 +80,47 @@ export default async function OnboardingPage({ params }: PageProps) {
   })
 
   const viewerCanManageAttachments = canManageAttachments(viewerRole)
+
+  // Fetch course attempts for this user to show progress on LEARNING tasks
+  const courseAttempts = await prisma.courseAttempt.findMany({
+    where: { userId: viewingUserId },
+    select: {
+      id: true,
+      taskId: true,
+      courseId: true,
+      score: true,
+      passed: true,
+      attemptNumber: true,
+      completedAt: true,
+    },
+    orderBy: { attemptNumber: 'asc' },
+  })
+
+  // Build a map: taskId -> attempt summary
+  const attemptsByTask = new Map<string, {
+    count: number
+    bestScore: number
+    passed: boolean
+    latestPassedAttemptId: string | null
+  }>()
+  for (const attempt of courseAttempts) {
+    const existing = attemptsByTask.get(attempt.taskId)
+    if (!existing) {
+      attemptsByTask.set(attempt.taskId, {
+        count: 1,
+        bestScore: attempt.score,
+        passed: attempt.passed,
+        latestPassedAttemptId: attempt.passed ? attempt.id : null,
+      })
+    } else {
+      attemptsByTask.set(attempt.taskId, {
+        count: existing.count + 1,
+        bestScore: Math.max(existing.bestScore, attempt.score),
+        passed: existing.passed || attempt.passed,
+        latestPassedAttemptId: attempt.passed ? attempt.id : existing.latestPassedAttemptId,
+      })
+    }
+  }
 
   // Fetch all UserTask records for this user, including document and approval info
   const userTaskRecords = await prisma.userTask.findMany({
@@ -102,6 +146,7 @@ export default async function OnboardingPage({ params }: PageProps) {
     supervisor: uw.supervisor,
     tasks: uw.workflow.tasks.map(({ task }) => {
       const ut = userTaskMap.get(task.id)
+      const courseProgress = attemptsByTask.get(task.id)
       return {
         id: task.id,
         title: task.title,
@@ -124,6 +169,12 @@ export default async function OnboardingPage({ params }: PageProps) {
         resourceDocumentId: task.resourceDocument?.id ?? null,
         resourceDocumentFilename: task.resourceDocument?.filename ?? null,
         resourceDocumentUrl: task.resourceDocument?.url ?? null,
+        courseId: task.course?.id ?? null,
+        courseTitle: task.course?.title ?? null,
+        courseAttemptCount: courseProgress?.count ?? 0,
+        bestScore: courseProgress?.bestScore ?? null,
+        coursePassed: courseProgress?.passed ?? false,
+        latestPassedAttemptId: courseProgress?.latestPassedAttemptId ?? null,
       }
     }),
   }))

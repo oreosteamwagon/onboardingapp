@@ -7,12 +7,18 @@ import type { TaskType } from '@prisma/client'
 const TASK_TYPES: { value: TaskType; label: string; hint: string }[] = [
   { value: 'STANDARD', label: 'Standard', hint: 'User confirms with a checkbox' },
   { value: 'UPLOAD', label: 'File Upload', hint: 'User must upload a document' },
+  { value: 'LEARNING', label: 'Learning Course', hint: 'User takes a course and passes a quiz' },
 ]
 
 interface ResourceDoc {
   id: string
   filename: string
   url: string | null
+}
+
+interface CourseOption {
+  id: string
+  title: string
 }
 
 interface Task {
@@ -22,13 +28,16 @@ interface Task {
   taskType: TaskType
   order: number
   resourceDocumentId: string | null
-  resourceDocument: ResourceDoc | null  // ResourceDoc already includes url
+  resourceDocument: ResourceDoc | null
+  courseId: string | null
+  course: CourseOption | null
 }
 
 interface TaskManagerProps {
   tasks: Task[]
   viewerIsAdmin: boolean
   resources: ResourceDoc[]
+  courses: CourseOption[]
 }
 
 const emptyForm = {
@@ -37,9 +46,10 @@ const emptyForm = {
   taskType: 'STANDARD' as TaskType,
   order: 0,
   resourceDocumentId: null as string | null,
+  courseId: null as string | null,
 }
 
-export default function TaskManager({ tasks: initial, viewerIsAdmin, resources }: TaskManagerProps) {
+export default function TaskManager({ tasks: initial, viewerIsAdmin, resources, courses }: TaskManagerProps) {
   const router = useRouter()
   const [tasks, setTasks] = useState(initial)
   const [error, setError] = useState<string | null>(null)
@@ -74,6 +84,7 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin, resources }
       taskType: task.taskType,
       order: task.order,
       resourceDocumentId: task.resourceDocumentId,
+      courseId: task.courseId,
     })
   }
 
@@ -90,7 +101,8 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin, resources }
           description: form.description || null,
           taskType: form.taskType,
           order: form.order,
-          resourceDocumentId: form.resourceDocumentId || null,
+          resourceDocumentId: form.taskType !== 'LEARNING' ? (form.resourceDocumentId || null) : null,
+          courseId: form.taskType === 'LEARNING' ? (form.courseId || null) : null,
         }),
       })
       const data = await res.json()
@@ -124,7 +136,8 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin, resources }
           description: editForm.description || null,
           taskType: editForm.taskType,
           order: editForm.order,
-          resourceDocumentId: editForm.resourceDocumentId || null,
+          resourceDocumentId: editForm.taskType !== 'LEARNING' ? (editForm.resourceDocumentId || null) : null,
+          courseId: editForm.taskType === 'LEARNING' ? (editForm.courseId || null) : null,
         }),
       })
       const data = await res.json()
@@ -206,6 +219,7 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin, resources }
           loading={loading}
           submitLabel="Create Task"
           resources={resources}
+          courses={courses}
         />
       )}
 
@@ -226,6 +240,7 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin, resources }
                   loading={loading}
                   submitLabel="Save Changes"
                   resources={resources}
+                  courses={courses}
                 />
               </div>
             ) : (
@@ -266,6 +281,11 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin, resources }
                       )}
                     </p>
                   )}
+                  {task.course && (
+                    <p className="text-xs mt-1 text-gray-500">
+                      Course: <span className="text-gray-700">{task.course.title}</span>
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button
@@ -296,13 +316,23 @@ export default function TaskManager({ tasks: initial, viewerIsAdmin, resources }
 // ---- sub-components ----
 
 function TaskTypeBadge({ type }: { type: TaskType }) {
-  const styles =
-    type === 'UPLOAD'
-      ? 'bg-purple-100 text-purple-800'
-      : 'bg-gray-100 text-gray-700'
+  if (type === 'UPLOAD') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+        File Upload
+      </span>
+    )
+  }
+  if (type === 'LEARNING') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+        Learning Course
+      </span>
+    )
+  }
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${styles}`}>
-      {type === 'UPLOAD' ? 'File Upload' : 'Standard'}
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+      Standard
     </span>
   )
 }
@@ -315,6 +345,7 @@ interface TaskFormProps {
   loading: boolean
   submitLabel: string
   resources: ResourceDoc[]
+  courses: CourseOption[]
 }
 
 function TaskForm({
@@ -325,6 +356,7 @@ function TaskForm({
   loading,
   submitLabel,
   resources,
+  courses,
 }: TaskFormProps) {
   return (
     <form
@@ -397,23 +429,43 @@ function TaskForm({
           />
         </div>
 
-        <div className="sm:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Linked Resource (optional)
-          </label>
-          <select
-            value={form.resourceDocumentId ?? ''}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, resourceDocumentId: e.target.value || null }))
-            }
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="">— None —</option>
-            {resources.map((r) => (
-              <option key={r.id} value={r.id}>{r.url ? `[Link] ${r.filename}` : r.filename}</option>
-            ))}
-          </select>
-        </div>
+        {form.taskType === 'LEARNING' ? (
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Linked Course
+            </label>
+            <select
+              value={form.courseId ?? ''}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, courseId: e.target.value || null }))
+              }
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="">— None —</option>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>{c.title}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Linked Resource (optional)
+            </label>
+            <select
+              value={form.resourceDocumentId ?? ''}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, resourceDocumentId: e.target.value || null }))
+              }
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="">— None —</option>
+              {resources.map((r) => (
+                <option key={r.id} value={r.id}>{r.url ? `[Link] ${r.filename}` : r.filename}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end gap-3 pt-2">

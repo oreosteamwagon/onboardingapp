@@ -19,6 +19,7 @@ enum Role {
 enum TaskType {
   STANDARD
   UPLOAD
+  LEARNING
 }
 
 enum ApprovalStatus {
@@ -48,6 +49,8 @@ model User {
   supervisedWorkflows    UserWorkflow[]   @relation("WorkflowSupervisor")
   assignedWorkflowsBy    UserWorkflow[]   @relation("WorkflowAssigner")
   uploadedAttachments    TaskAttachment[] @relation("AttachmentUploader")
+  authoredCourses        Course[]         @relation("CourseAuthor")
+  courseAttempts         CourseAttempt[]  @relation("UserAttempts")
 
   @@index([username])
   @@index([email])
@@ -74,17 +77,22 @@ model DocumentCategory {
 }
 
 model OnboardingTask {
-  id                 String         @id @default(cuid())
+  id                 String          @id @default(cuid())
   title              String
   description        String?
-  taskType           TaskType       @default(STANDARD)
-  order              Int            @default(0)
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  taskType           TaskType        @default(STANDARD)
+  order              Int             @default(0)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
   resourceDocumentId String?
-  resourceDocument   Document?      @relation("TaskResource", fields: [resourceDocumentId], references: [id])
+  courseId           String?
+  resourceDocument   Document?       @relation("TaskResource", fields: [resourceDocumentId], references: [id])
+  course             Course?         @relation("TaskCourse", fields: [courseId], references: [id])
   userTasks          UserTask[]
   workflowTasks      WorkflowTask[]
+  courseAttempts     CourseAttempt[]
+
+  @@index([courseId])
 }
 
 model UserTask {
@@ -183,4 +191,62 @@ model UserWorkflow {
   @@index([userId])
   @@index([workflowId])
   @@index([supervisorId])
+}
+
+model Course {
+  id           String           @id @default(cuid())
+  title        String
+  description  String?
+  contentHtml  String
+  passingScore Int
+  createdById  String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  createdBy    User             @relation("CourseAuthor", fields: [createdById], references: [id])
+  questions    CourseQuestion[]
+  attempts     CourseAttempt[]
+  linkedTasks  OnboardingTask[] @relation("TaskCourse")
+
+  @@index([createdById])
+}
+
+model CourseQuestion {
+  id       String         @id @default(cuid())
+  courseId String
+  text     String
+  order    Int            @default(0)
+  course   Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  answers  CourseAnswer[]
+
+  @@index([courseId])
+}
+
+model CourseAnswer {
+  id         String         @id @default(cuid())
+  questionId String
+  text       String
+  isCorrect  Boolean        @default(false)
+  order      Int            @default(0)
+  question   CourseQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+}
+
+model CourseAttempt {
+  id            String         @id @default(cuid())
+  userId        String
+  courseId      String
+  taskId        String
+  score         Int
+  passed        Boolean
+  attemptNumber Int
+  completedAt   DateTime       @default(now())
+  user          User           @relation("UserAttempts", fields: [userId], references: [id])
+  course        Course         @relation(fields: [courseId], references: [id])
+  task          OnboardingTask @relation(fields: [taskId], references: [id])
+
+  @@index([userId])
+  @@index([courseId])
+  @@index([taskId])
+  @@index([userId, courseId])
 }

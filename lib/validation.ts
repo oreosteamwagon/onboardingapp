@@ -1,6 +1,6 @@
 import type { TaskType, ApprovalStatus } from '@prisma/client'
 
-export const VALID_TASK_TYPES: readonly TaskType[] = ['STANDARD', 'UPLOAD'] as const
+export const VALID_TASK_TYPES: readonly TaskType[] = ['STANDARD', 'UPLOAD', 'LEARNING'] as const
 export const VALID_APPROVAL_ACTIONS: readonly ApprovalStatus[] = ['APPROVED', 'REJECTED'] as const
 
 // CUID format: starts with 'c', followed by 24 alphanumeric chars (lowercase)
@@ -118,6 +118,58 @@ export function validateWebLinkUrl(v: unknown): string | null {
     if (parsed.protocol !== 'https:') return 'url must use https'
   } catch {
     return 'url is not a valid URL'
+  }
+  return null
+}
+
+export function validatePassingScore(v: unknown): string | null {
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 100)
+    return 'passingScore must be an integer between 1 and 100'
+  return null
+}
+
+export function validateQuestionText(v: unknown): string | null {
+  if (typeof v !== 'string' || v.trim().length === 0 || v.length > 1000)
+    return 'question text must be 1-1000 characters'
+  return null
+}
+
+export function validateAnswerText(v: unknown): string | null {
+  if (typeof v !== 'string' || v.trim().length === 0 || v.length > 500)
+    return 'answer text must be 1-500 characters'
+  return null
+}
+
+export function validateCourseQuestions(questions: unknown): string | null {
+  if (!Array.isArray(questions) || questions.length < 1)
+    return 'course must have at least 1 question'
+  for (let qi = 0; qi < questions.length; qi++) {
+    const q = questions[qi] as Record<string, unknown>
+    const tErr = validateQuestionText(q.text)
+    if (tErr) return `question ${qi + 1}: ${tErr}`
+    const answers = q.answers
+    if (!Array.isArray(answers) || answers.length < 2 || answers.length > 4)
+      return `question ${qi + 1} must have 2-4 answers`
+    let correct = 0
+    for (let ai = 0; ai < answers.length; ai++) {
+      const a = answers[ai] as Record<string, unknown>
+      const aErr = validateAnswerText(a.text)
+      if (aErr) return `question ${qi + 1} answer ${ai + 1}: ${aErr}`
+      if (a.isCorrect === true) correct++
+    }
+    if (correct !== 1) return `question ${qi + 1} must have exactly 1 correct answer`
+  }
+  return null
+}
+
+export function validateAnswerSubmission(v: unknown): string | null {
+  if (!Array.isArray(v) || v.length === 0) return 'answers must be a non-empty array'
+  for (const item of v) {
+    const i = item as Record<string, unknown>
+    const qErr = validateCuid(i.questionId, 'questionId')
+    if (qErr) return qErr
+    const aErr = validateCuid(i.answerId, 'answerId')
+    if (aErr) return aErr
   }
   return null
 }

@@ -104,6 +104,14 @@ export function canDeleteDocument(role: Role): boolean {
   return role === Role.ADMIN
 }
 
+export function canManageCourses(role: Role): boolean {
+  return hasRole(role, Role.HR)
+}
+
+export function canViewAnyCertificate(role: Role): boolean {
+  return hasRole(role, Role.SUPERVISOR)
+}
+
 // Returns allowed roles from a comma-separated header or session
 export function assertRole(
   userRole: Role | undefined | null,

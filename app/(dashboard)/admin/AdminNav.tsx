@@ -23,6 +23,7 @@ export default function AdminNav({ role }: AdminNavProps) {
   const tabs: Tab[] = [
     { href: '/admin/tasks',               label: 'Tasks',      show: true },
     { href: '/admin/workflows',           label: 'Workflows',  show: canWorkflows },
+    { href: '/admin/learning',            label: 'Learning',   show: canWorkflows },
     { href: '/admin/users',               label: 'Users',      show: isAdmin },
     { href: '/admin/branding',            label: 'Branding',   show: isAdmin },
     { href: '/admin/document-categories', label: 'Categories', show: isAdmin },

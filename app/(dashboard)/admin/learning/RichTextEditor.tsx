@@ -4,6 +4,7 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
+import 'prosemirror-view/style/prosemirror.css'
 
 interface RichTextEditorProps {
   value: string
@@ -123,7 +124,7 @@ export default function RichTextEditor({ value, onChange }: RichTextEditorProps)
       </div>
       <EditorContent
         editor={editor}
-        className="prose prose-sm max-w-none px-4 py-3 min-h-[200px] focus-within:outline-none"
+        className="prose prose-sm max-w-none"
       />
     </div>
   )

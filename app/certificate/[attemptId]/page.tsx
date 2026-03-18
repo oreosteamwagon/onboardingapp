@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { redirect } from 'next/navigation'
 import { canViewAnyCertificate } from '@/lib/permissions'
+import { sanitizeHexColor } from '@/lib/validation'
 import type { Role } from '@prisma/client'
 import PrintButton from './PrintButton'
 
@@ -46,7 +47,7 @@ export default async function CertificatePage({ params }: PageProps) {
   }
 
   const branding = await prisma.brandingSetting.findFirst({
-    select: { orgName: true, logoPath: true },
+    select: { orgName: true, logoPath: true, primaryColor: true, accentColor: true },
   })
 
   const u = attempt.user
@@ -55,6 +56,9 @@ export default async function CertificatePage({ params }: PageProps) {
   const displayName = `${firstName} ${lastName}`.trim()
   const orgName = branding?.orgName ?? 'My Organization'
   const logoUrl = branding?.logoPath ? '/api/branding/logo' : null
+  // Re-validate colors from DB before injecting into CSS (defense-in-depth)
+  const primaryColor = sanitizeHexColor(branding?.primaryColor ?? '', '#2563eb')
+  const accentColor = sanitizeHexColor(branding?.accentColor ?? '', '#7c3aed')
 
   return (
     <>
@@ -71,8 +75,8 @@ export default async function CertificatePage({ params }: PageProps) {
         </div>
 
         <div
-          className="bg-white w-full max-w-3xl rounded-lg shadow-lg px-16 py-12 text-center border-4 border-indigo-600"
-          style={{ fontFamily: 'Georgia, serif' }}
+          className="bg-white w-full max-w-3xl rounded-lg shadow-lg px-16 py-12 text-center border-4"
+          style={{ fontFamily: 'Georgia, serif', borderColor: primaryColor }}
         >
           {logoUrl && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -85,7 +89,7 @@ export default async function CertificatePage({ params }: PageProps) {
           <p className="text-3xl font-bold text-gray-900 tracking-wide mb-2">{orgName}</p>
           <p className="text-xs uppercase tracking-widest text-gray-400 mb-8">presents this</p>
 
-          <h1 className="text-4xl font-bold text-indigo-700 mb-8">Certificate of Completion</h1>
+          <h1 className="text-4xl font-bold mb-8" style={{ color: accentColor }}>Certificate of Completion</h1>
 
           <p className="text-base text-gray-600 mb-2">This certifies that</p>
           <p className="text-3xl font-semibold text-gray-900 mb-2">{displayName}</p>

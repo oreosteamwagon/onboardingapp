@@ -174,6 +174,20 @@ export function validateAnswerSubmission(v: unknown): string | null {
   return null
 }
 
+// Strict 6-digit hex only — used for re-validating stored colors before CSS injection
+const HEX_COLOR_STRICT_RE = /^#[0-9a-fA-F]{6}$/
+
+export function validateHexColor(v: unknown, fieldName = 'color'): string | null {
+  if (typeof v !== 'string' || !HEX_COLOR_STRICT_RE.test(v)) {
+    return `${fieldName} must be a valid 6-digit hex color (e.g. #2563eb)`
+  }
+  return null
+}
+
+export function sanitizeHexColor(v: string, fallback: string): string {
+  return HEX_COLOR_STRICT_RE.test(v) ? v : fallback
+}
+
 export function categoryNameToSlug(name: string): string {
   return name.trim().toLowerCase()
     .replace(/&/g, 'and')

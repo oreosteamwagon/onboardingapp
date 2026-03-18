@@ -86,6 +86,8 @@ describe('GET /api/certificates/[attemptId]', () => {
     ;(prisma.brandingSetting.findFirst as jest.Mock).mockResolvedValueOnce({
       orgName: 'Test Corp',
       logoPath: null,
+      primaryColor: '#2563eb',
+      accentColor: '#7c3aed',
     })
     const res = await GET(makeRequest(), routeCtx)
     expect(res.status).toBe(200)
@@ -94,6 +96,8 @@ describe('GET /api/certificates/[attemptId]', () => {
     expect(data.courseName).toBe('Safety Training')
     expect(data.score).toBe(90)
     expect(data.logoUrl).toBeNull()
+    expect(data.primaryColor).toBe('#2563eb')
+    expect(data.accentColor).toBe('#7c3aed')
   })
 
   it('returns 200 for SUPERVISOR viewing another user attempt', async () => {
@@ -110,6 +114,48 @@ describe('GET /api/certificates/[attemptId]', () => {
     ;(prisma.brandingSetting.findFirst as jest.Mock).mockResolvedValueOnce(null)
     const res = await GET(makeRequest(), routeCtx)
     expect(res.status).toBe(200)
+  })
+
+  it('falls back to default colors when branding is null', async () => {
+    mockAuth.mockResolvedValueOnce(makeSession('USER', 'user-1') as never)
+    ;(prisma.courseAttempt.findUnique as jest.Mock).mockResolvedValueOnce(passedAttempt)
+    ;(prisma.brandingSetting.findFirst as jest.Mock).mockResolvedValueOnce(null)
+    const res = await GET(makeRequest(), routeCtx)
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.primaryColor).toBe('#2563eb')
+    expect(data.accentColor).toBe('#7c3aed')
+  })
+
+  it('falls back to defaults when stored colors are invalid hex', async () => {
+    mockAuth.mockResolvedValueOnce(makeSession('USER', 'user-1') as never)
+    ;(prisma.courseAttempt.findUnique as jest.Mock).mockResolvedValueOnce(passedAttempt)
+    ;(prisma.brandingSetting.findFirst as jest.Mock).mockResolvedValueOnce({
+      orgName: 'Test Corp',
+      logoPath: null,
+      primaryColor: 'red; color: evil',
+      accentColor: 'javascript:alert(1)',
+    })
+    const res = await GET(makeRequest(), routeCtx)
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.primaryColor).toBe('#2563eb')
+    expect(data.accentColor).toBe('#7c3aed')
+  })
+
+  it('returns custom branding colors when valid', async () => {
+    mockAuth.mockResolvedValueOnce(makeSession('USER', 'user-1') as never)
+    ;(prisma.courseAttempt.findUnique as jest.Mock).mockResolvedValueOnce(passedAttempt)
+    ;(prisma.brandingSetting.findFirst as jest.Mock).mockResolvedValueOnce({
+      orgName: 'Acme Inc',
+      logoPath: null,
+      primaryColor: '#ff6600',
+      accentColor: '#003366',
+    })
+    const res = await GET(makeRequest(), routeCtx)
+    const data = await res.json()
+    expect(data.primaryColor).toBe('#ff6600')
+    expect(data.accentColor).toBe('#003366')
   })
 
   it('falls back to username when firstName is null', async () => {

@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageUsers } from '@/lib/permissions'
 import { checkFactoryResetRateLimit } from '@/lib/ratelimit'
-import { logError } from '@/lib/logger'
+import { logError, log } from '@/lib/logger'
 import { unlink } from 'fs/promises'
 import { join } from 'path'
 import type { Role } from '@prisma/client'
@@ -86,6 +86,8 @@ export async function POST(req: NextRequest) {
       await tx.documentCategory.deleteMany({ where: { isBuiltIn: false } })
       // 11. Non-admin users (all referencing records cleared above)
       await tx.user.deleteMany({ where: { role: { not: 'ADMIN' } } })
+      // 12. Application logs
+      await tx.appLog.deleteMany({})
     })
   } catch (err) {
     logError({ message: 'Factory reset transaction failed', action: 'factory_reset', userId: session.user.id, meta: { error: String(err) } })
@@ -111,6 +113,8 @@ export async function POST(req: NextRequest) {
       fileErrors++
     }
   }
+
+  log({ message: 'environment reset by admin', action: 'factory_reset', userId: session.user.id, meta: { filesDeleted, fileErrors } })
 
   return NextResponse.json(
     {

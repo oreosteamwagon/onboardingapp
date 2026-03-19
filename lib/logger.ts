@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/db'
-import type { LogLevel } from '@prisma/client'
+import type { LogLevel, Prisma } from '@prisma/client'
 
 export interface LogPayload {
   message: string
@@ -52,7 +52,7 @@ function emit(level: LogLevel, payload: LogPayload): void {
       action: payload.action ?? null,
       path: payload.path ?? null,
       statusCode: payload.statusCode ?? null,
-      meta: scrubbedMeta,
+      meta: scrubbedMeta as Prisma.InputJsonValue,
     },
   }).catch(() => { /* intentional: never propagate log failures */ })
 }

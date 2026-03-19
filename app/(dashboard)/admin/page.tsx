@@ -36,6 +36,12 @@ export default async function AdminPage() {
       show: canWorkflows,
     },
     {
+      href: '/admin/learning',
+      label: 'Learning',
+      description: 'Create and manage courses with quiz questions for learning tasks.',
+      show: canWorkflows,
+    },
+    {
       href: '/admin/users',
       label: 'Users',
       description: 'Manage user accounts, roles, and active status.',

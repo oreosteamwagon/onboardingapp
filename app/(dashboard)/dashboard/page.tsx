@@ -2,7 +2,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { canViewAllTasks } from '@/lib/permissions'
+import { canViewAllTasks, canApproveAny } from '@/lib/permissions'
 import type { Role } from '@prisma/client'
 
 export default async function DashboardPage() {
@@ -23,6 +23,7 @@ export default async function DashboardPage() {
   const totalCount = taskStats.length
 
   const showUserTable = canViewAllTasks(user.role as Role)
+  const isPayrollPlus = canApproveAny(user.role as Role)
 
   let pendingUsers: { id: string; username: string; completedCount: number; totalCount: number }[] = []
 
@@ -55,18 +56,29 @@ export default async function DashboardPage() {
       </div>
 
       <div className="flex gap-4 mb-8">
-        <Link
-          href={`/onboarding/${user.id}`}
-          className="rounded-md bg-primary text-white px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
-        >
-          View My Checklist
-        </Link>
-        <Link
-          href="/documents"
-          className="rounded-md border border-gray-300 text-gray-700 px-4 py-2 text-sm font-medium hover:bg-gray-50 transition-colors"
-        >
-          Documents
-        </Link>
+        {isPayrollPlus ? (
+          <Link
+            href="/approvals"
+            className="rounded-md bg-primary text-white px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            Approvals
+          </Link>
+        ) : (
+          <>
+            <Link
+              href={`/onboarding/${user.id}`}
+              className="rounded-md bg-primary text-white px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              View My Checklist
+            </Link>
+            <Link
+              href="/documents"
+              className="rounded-md border border-gray-300 text-gray-700 px-4 py-2 text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              Documents
+            </Link>
+          </>
+        )}
       </div>
 
       {showUserTable && pendingUsers.length > 0 && (

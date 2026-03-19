@@ -174,3 +174,9 @@ const logReadLimiter = new RateLimiterMemory({ points: 30, duration: 60, blockDu
 export async function checkLogReadRateLimit(userId: string): Promise<void> {
   await logReadLimiter.consume(userId)
 }
+
+// 20 user creations per hour per admin
+const userCreateLimiter = new RateLimiterMemory({ points: 20, duration: 3600, blockDuration: 3600 })
+export async function checkUserCreateRateLimit(userId: string): Promise<void> {
+  await userCreateLimiter.consume(userId)
+}

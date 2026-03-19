@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { canManageUsers } from '@/lib/permissions'
+import { canManageUsers, roleRank } from '@/lib/permissions'
 import { checkUserProfileUpdateRateLimit } from '@/lib/ratelimit'
 import { logError, log } from '@/lib/logger'
-import { validateName, validateDepartment, validatePositionCode } from '@/lib/validation'
+import { validateName, validateDepartment, validatePositionCode, validateCuid } from '@/lib/validation'
 import type { Role } from '@prisma/client'
 
 const VALID_ROLES: Role[] = ['USER', 'PAYROLL', 'HR', 'SUPERVISOR', 'ADMIN']
@@ -22,6 +22,15 @@ const USER_SELECT = {
   preferredLastName: true,
   department: true,
   positionCode: true,
+  supervisorId: true,
+  supervisor: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      username: true,
+    },
+  },
 } as const
 
 export async function PATCH(
@@ -115,8 +124,36 @@ export async function PATCH(
     else data.positionCode = payload.positionCode
   }
 
+  let supervisorIdToSet: string | undefined = undefined
+  if ('supervisorId' in payload) {
+    if (payload.supervisorId === null) {
+      errors.push('supervisorId is required')
+    } else {
+      const svErr = validateCuid(payload.supervisorId, 'supervisorId')
+      if (svErr) {
+        errors.push(svErr)
+      } else {
+        supervisorIdToSet = payload.supervisorId as string
+      }
+    }
+  }
+
   if (errors.length > 0) {
     return NextResponse.json({ errors }, { status: 400 })
+  }
+
+  if (supervisorIdToSet !== undefined) {
+    if (supervisorIdToSet === userId) {
+      return NextResponse.json({ error: 'supervisorId cannot reference the user being updated' }, { status: 400 })
+    }
+    const sv = await prisma.user.findUnique({
+      where: { id: supervisorIdToSet },
+      select: { role: true, active: true },
+    })
+    if (!sv || !sv.active || roleRank(sv.role) < roleRank('SUPERVISOR')) {
+      return NextResponse.json({ error: 'supervisorId must reference an active SUPERVISOR+ user' }, { status: 400 })
+    }
+    data.supervisorId = supervisorIdToSet
   }
 
   if (Object.keys(data).length === 0) {

@@ -73,9 +73,13 @@ model User {
   uploadedAttachments    TaskAttachment[] @relation("AttachmentUploader")
   authoredCourses        Course[]         @relation("CourseAuthor")
   courseAttempts         CourseAttempt[]  @relation("UserAttempts")
+  supervisorId           String?
+  supervisor             User?            @relation("UserSupervisor", fields: [supervisorId], references: [id])
+  supervisedUsers        User[]           @relation("UserSupervisor")
 
   @@index([username])
   @@index([email])
+  @@index([supervisorId])
 }
 
 model BrandingSetting {

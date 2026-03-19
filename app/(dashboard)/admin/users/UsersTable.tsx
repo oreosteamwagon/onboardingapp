@@ -5,6 +5,13 @@ import type { Role } from '@prisma/client'
 
 const ROLES: Role[] = ['USER', 'PAYROLL', 'HR', 'SUPERVISOR', 'ADMIN']
 
+interface SupervisorOption {
+  id: string
+  firstName: string | null
+  lastName: string | null
+  username: string
+}
+
 interface User {
   id: string
   username: string
@@ -18,10 +25,13 @@ interface User {
   preferredLastName: string | null
   department: string | null
   positionCode: string | null
+  supervisorId: string | null
+  supervisor: SupervisorOption | null
 }
 
 interface UsersTableProps {
   users: User[]
+  supervisors: SupervisorOption[]
 }
 
 interface ProfileForm {
@@ -31,9 +41,10 @@ interface ProfileForm {
   preferredLastName: string
   department: string
   positionCode: string
+  supervisorId: string
 }
 
-export default function UsersTable({ users: initial }: UsersTableProps) {
+export default function UsersTable({ users: initial, supervisors }: UsersTableProps) {
   const [users, setUsers] = useState(initial)
   const [showCreate, setShowCreate] = useState(false)
   const [tempPassword, setTempPassword] = useState<string | null>(null)
@@ -54,6 +65,7 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
     preferredLastName: '',
     department: '',
     positionCode: '',
+    supervisorId: '',
   })
   const [profileErrors, setProfileErrors] = useState<string[]>([])
   const [profileSaving, setProfileSaving] = useState(false)
@@ -68,6 +80,7 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
   const [newPreferredLastName, setNewPreferredLastName] = useState('')
   const [newDepartment, setNewDepartment] = useState('')
   const [newPositionCode, setNewPositionCode] = useState('')
+  const [newSupervisorId, setNewSupervisorId] = useState('')
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -86,6 +99,7 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
           preferredLastName: newPreferredLastName || null,
           department: newDepartment,
           positionCode: newPositionCode,
+          supervisorId: newSupervisorId,
         }),
       })
       const data = await res.json()
@@ -108,6 +122,7 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
       setNewPreferredLastName('')
       setNewDepartment('')
       setNewPositionCode('')
+      setNewSupervisorId('')
       setShowCreate(false)
     } catch {
       setError('Unexpected error creating user.')
@@ -187,6 +202,7 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
       preferredLastName: u.preferredLastName ?? '',
       department: u.department ?? '',
       positionCode: u.positionCode ?? '',
+      supervisorId: u.supervisorId ?? '',
     })
     setEditProfileUserId(u.id)
   }
@@ -206,6 +222,7 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
           preferredLastName: profileForm.preferredLastName || null,
           department: profileForm.department,
           positionCode: profileForm.positionCode,
+          supervisorId: profileForm.supervisorId,
         }),
       })
       const data = await res.json()
@@ -404,6 +421,24 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Supervisor <span className="text-red-500">*</span>
+            </label>
+            <select
+              required
+              value={newSupervisorId}
+              onChange={(e) => setNewSupervisorId(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="">-- Select supervisor --</option>
+              {supervisors.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {`${s.firstName ?? ''} ${s.lastName ?? ''}`.trim() || s.username} ({s.username})
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="sm:col-span-3 flex justify-end">
             <button
               type="submit"
@@ -419,7 +454,7 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              {['Name / Username', 'Email', 'Role', 'Status', 'Created', 'Actions'].map((h) => (
+              {['Name / Username', 'Email', 'Role', 'Supervisor', 'Status', 'Created', 'Actions'].map((h) => (
                 <th
                   key={h}
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -459,6 +494,11 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {u.supervisor
+                      ? `${u.supervisor.firstName ?? ''} ${u.supervisor.lastName ?? ''}`.trim() || u.supervisor.username
+                      : <span className="text-gray-400">&mdash;</span>}
                   </td>
                   <td className="px-6 py-4 text-sm">
                     <span
@@ -523,7 +563,7 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
                 </tr>
                 {editProfileUserId === u.id && (
                   <tr key={`${u.id}-profile`}>
-                    <td colSpan={6} className="px-6 py-4 bg-gray-50">
+                    <td colSpan={7} className="px-6 py-4 bg-gray-50">
                       <form
                         onSubmit={(e) => handleSaveProfile(e, u.id)}
                         className="grid grid-cols-1 sm:grid-cols-3 gap-4"
@@ -626,6 +666,26 @@ export default function UsersTable({ users: initial }: UsersTableProps) {
                             }
                             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                           />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Supervisor <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            required
+                            value={profileForm.supervisorId}
+                            onChange={(e) =>
+                              setProfileForm((f) => ({ ...f, supervisorId: e.target.value }))
+                            }
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                          >
+                            <option value="">-- Select supervisor --</option>
+                            {supervisors.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {`${s.firstName ?? ''} ${s.lastName ?? ''}`.trim() || s.username} ({s.username})
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div className="sm:col-span-3 flex justify-end gap-3">
                           <button

@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canDeleteDocument } from '@/lib/permissions'
 import { checkDocumentDeleteRateLimit } from '@/lib/ratelimit'
-import { logError, logAccess } from '@/lib/logger'
+import { logError, log } from '@/lib/logger'
 import { validateCuid } from '@/lib/validation'
 import { unlink } from 'fs/promises'
 import { join } from 'path'
@@ -81,7 +81,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
 
   await prisma.document.delete({ where: { id: document.id } })
 
-  logAccess({ message: 'document deleted', action: 'document_delete', userId: session.user.id, path: `/api/documents/${document.id}`, statusCode: 204, meta: { documentId: document.id } })
+  log({ message: 'document deleted', action: 'document_delete', userId: session.user.id, path: `/api/documents/${document.id}`, statusCode: 204, meta: { documentId: document.id } })
 
   return new NextResponse(null, { status: 204 })
 }

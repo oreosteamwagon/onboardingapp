@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 import { canManageWorkflows, isAdmin } from '@/lib/permissions'
 import { checkWorkflowMgmtRateLimit } from '@/lib/ratelimit'
 import { validateWorkflowName, validateDescription } from '@/lib/validation'
-import { logAccess } from '@/lib/logger'
+import { log } from '@/lib/logger'
 import type { Role } from '@prisma/client'
 
 interface RouteContext {
@@ -105,7 +105,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     },
   })
 
-  logAccess({ message: 'workflow updated', action: 'workflow_update', userId: session.user.id, statusCode: 200, meta: { workflowId: workflow.id } })
+  log({ message: 'workflow updated', action: 'workflow_update', userId: session.user.id, statusCode: 200, meta: { workflowId: workflow.id } })
   return NextResponse.json(workflow)
 }
 
@@ -149,6 +149,6 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     prisma.workflow.delete({ where: { id: params.workflowId } }),
   ])
 
-  logAccess({ message: 'workflow deleted', action: 'workflow_delete', userId: session.user.id, statusCode: 200, meta: { workflowId: params.workflowId } })
+  log({ message: 'workflow deleted', action: 'workflow_delete', userId: session.user.id, statusCode: 200, meta: { workflowId: params.workflowId } })
   return NextResponse.json({ deleted: true })
 }

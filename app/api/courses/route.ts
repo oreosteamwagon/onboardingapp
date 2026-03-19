@@ -10,7 +10,7 @@ import {
   validatePassingScore,
   validateCourseQuestions,
 } from '@/lib/validation'
-import { logAccess } from '@/lib/logger'
+import { log } from '@/lib/logger'
 import type { Role } from '@prisma/client'
 
 // GET /api/courses -- list all courses (HR+ only)
@@ -119,6 +119,6 @@ export async function POST(req: NextRequest) {
     })
   })
 
-  logAccess({ message: 'course created', action: 'course_create', userId: session.user.id, statusCode: 201, meta: { courseId: course.id } })
+  log({ message: 'course created', action: 'course_create', userId: session.user.id, statusCode: 201, meta: { courseId: course.id } })
   return NextResponse.json(course, { status: 201 })
 }

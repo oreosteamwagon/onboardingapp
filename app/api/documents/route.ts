@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db'
 import { canUploadDocuments, canViewAllDocuments } from '@/lib/permissions'
 import { saveUpload, UploadError } from '@/lib/upload'
 import { checkUploadRateLimit } from '@/lib/ratelimit'
-import { logError, logAccess } from '@/lib/logger'
+import { logError, log } from '@/lib/logger'
 import { validateTitle, validateWebLinkUrl } from '@/lib/validation'
 import type { Role } from '@prisma/client'
 
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    logAccess({ message: 'web link created', action: 'document_create', userId: session.user.id, statusCode: 201, meta: { documentId: doc.id, category: doc.category } })
+    log({ message: 'web link created', action: 'document_create', userId: session.user.id, statusCode: 201, meta: { documentId: doc.id, category: doc.category } })
     return NextResponse.json(
       {
         id: doc.id,
@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  logAccess({ message: 'document uploaded', action: 'document_create', userId: session.user.id, statusCode: 201, meta: { documentId: doc.id, category: doc.category } })
+  log({ message: 'document uploaded', action: 'document_create', userId: session.user.id, statusCode: 201, meta: { documentId: doc.id, category: doc.category } })
   return NextResponse.json(
     {
       id: doc.id,

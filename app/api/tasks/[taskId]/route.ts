@@ -10,7 +10,7 @@ import {
   validateOrder,
   validateCuid,
 } from '@/lib/validation'
-import { logAccess } from '@/lib/logger'
+import { log } from '@/lib/logger'
 import type { Role, TaskType } from '@prisma/client'
 
 interface RouteContext {
@@ -176,7 +176,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     },
   })
 
-  logAccess({ message: 'task updated', action: 'task_update', userId: session.user.id, statusCode: 200, meta: { taskId: task.id } })
+  log({ message: 'task updated', action: 'task_update', userId: session.user.id, statusCode: 200, meta: { taskId: task.id } })
   return NextResponse.json(task)
 }
 
@@ -228,6 +228,6 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
 
   await prisma.onboardingTask.delete({ where: { id: taskId } })
 
-  logAccess({ message: 'task deleted', action: 'task_delete', userId: session.user.id, statusCode: 200, meta: { taskId } })
+  log({ message: 'task deleted', action: 'task_delete', userId: session.user.id, statusCode: 200, meta: { taskId } })
   return NextResponse.json({ deleted: true })
 }

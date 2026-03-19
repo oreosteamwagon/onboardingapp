@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageUsers } from '@/lib/permissions'
-import { logError } from '@/lib/logger'
+import { logError, logAccess } from '@/lib/logger'
 import argon2 from 'argon2'
 import { randomBytes } from 'crypto'
 import type { Role } from '@prisma/client'
@@ -143,6 +143,7 @@ export async function POST(req: NextRequest) {
       select: USER_SELECT,
     })
 
+    logAccess({ message: 'user created', action: 'user_create', userId: session.user.id, statusCode: 201, meta: { newUserId: user.id, role: user.role } })
     return NextResponse.json({ user, tempPassword }, { status: 201 })
   } catch (err: unknown) {
     if (

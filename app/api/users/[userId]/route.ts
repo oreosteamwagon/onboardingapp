@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageUsers } from '@/lib/permissions'
 import { checkUserProfileUpdateRateLimit } from '@/lib/ratelimit'
-import { logError } from '@/lib/logger'
+import { logError, logAccess } from '@/lib/logger'
 import { validateName, validateDepartment, validatePositionCode } from '@/lib/validation'
 import type { Role } from '@prisma/client'
 
@@ -135,6 +135,7 @@ export async function PATCH(
       data,
       select: USER_SELECT,
     })
+    logAccess({ message: 'user updated', action: 'user_update', userId: session.user.id, statusCode: 200, meta: { targetUserId: user.id, fields: Object.keys(data) } })
     return NextResponse.json(user)
   } catch (err: unknown) {
     if (

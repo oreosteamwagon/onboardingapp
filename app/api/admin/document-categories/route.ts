@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageDocumentCategories } from '@/lib/permissions'
 import { checkCategoryMgmtRateLimit } from '@/lib/ratelimit'
-import { logError } from '@/lib/logger'
+import { logError, logAccess } from '@/lib/logger'
 import { validateCategoryName, categoryNameToSlug } from '@/lib/validation'
 import type { Role } from '@prisma/client'
 import { Prisma } from '@prisma/client'
@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
       data: { slug, name: (name as string).trim(), isBuiltIn: false },
       select: { id: true, slug: true, name: true, isBuiltIn: true },
     })
+    logAccess({ message: 'document category created', action: 'category_create', userId: session.user.id, statusCode: 201, meta: { categoryId: category.id, slug: category.slug } })
     return NextResponse.json(category, { status: 201 })
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {

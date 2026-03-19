@@ -11,6 +11,7 @@ import {
   validatePassingScore,
   validateCourseQuestions,
 } from '@/lib/validation'
+import { logAccess } from '@/lib/logger'
 import type { Role } from '@prisma/client'
 
 interface RouteContext {
@@ -143,6 +144,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     })
   })
 
+  logAccess({ message: 'course updated', action: 'course_update', userId: session.user.id, statusCode: 200, meta: { courseId: params.courseId } })
   return NextResponse.json(course)
 }
 
@@ -189,5 +191,6 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
 
   await prisma.course.delete({ where: { id: params.courseId } })
 
+  logAccess({ message: 'course deleted', action: 'course_delete', userId: session.user.id, statusCode: 200, meta: { courseId: params.courseId } })
   return NextResponse.json({ deleted: true })
 }

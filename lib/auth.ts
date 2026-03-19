@@ -65,6 +65,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null
         }
 
+        logAccess({ message: 'login successful', action: 'login_success', userId: user.id, path: '/api/auth/callback/credentials', meta: { role: user.role } })
+
         return {
           id: user.id,
           name: user.username,

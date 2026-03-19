@@ -10,6 +10,7 @@ import {
   validateOrder,
   validateCuid,
 } from '@/lib/validation'
+import { logAccess } from '@/lib/logger'
 import type { Role, TaskType } from '@prisma/client'
 
 // GET /api/tasks — list all onboarding task definitions (HR+ only)
@@ -124,6 +125,7 @@ export async function POST(req: NextRequest) {
     },
   })
 
+  logAccess({ message: 'task created', action: 'task_create', userId: session.user.id, statusCode: 201, meta: { taskId: task.id, taskType: task.taskType } })
   return NextResponse.json(task, { status: 201 })
 }
 

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { canManageWorkflows } from '@/lib/permissions'
 import { checkWorkflowMgmtRateLimit } from '@/lib/ratelimit'
 import { validateWorkflowName, validateDescription } from '@/lib/validation'
+import { logAccess } from '@/lib/logger'
 import type { Role } from '@prisma/client'
 
 // GET /api/workflows — list all workflows with task count (HR+ only)
@@ -75,5 +76,6 @@ export async function POST(req: NextRequest) {
     },
   })
 
+  logAccess({ message: 'workflow created', action: 'workflow_create', userId: session.user.id, statusCode: 201, meta: { workflowId: workflow.id } })
   return NextResponse.json(workflow, { status: 201 })
 }

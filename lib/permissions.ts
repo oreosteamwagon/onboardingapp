@@ -1,11 +1,11 @@
 import { Role } from '@prisma/client'
 
-// Role hierarchy — higher index = more privilege
+// Role hierarchy — higher index = more privilege: USER < SUPERVISOR < PAYROLL < HR < ADMIN
 const ROLE_ORDER: Role[] = [
   Role.USER,
+  Role.SUPERVISOR,
   Role.PAYROLL,
   Role.HR,
-  Role.SUPERVISOR,
   Role.ADMIN,
 ]
 
@@ -74,6 +74,7 @@ export function canAssignWorkflows(role: Role): boolean {
 
 // PAYROLL, HR, and ADMIN can see all documents in the documents library.
 // USER and SUPERVISOR see only documents they uploaded themselves.
+// Note: canViewAllDocuments delegates to canApproveAny which uses explicit role checks.
 export function canViewAllDocuments(role: Role): boolean {
   return canApproveAny(role)
 }

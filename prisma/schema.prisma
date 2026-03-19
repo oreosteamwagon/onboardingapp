@@ -28,6 +28,28 @@ enum ApprovalStatus {
   REJECTED
 }
 
+enum LogLevel {
+  ERROR
+  ACCESS
+  LOG
+}
+
+model AppLog {
+  id         String    @id @default(cuid())
+  level      LogLevel
+  message    String
+  userId     String?
+  action     String?
+  path       String?
+  statusCode Int?
+  meta       Json?
+  createdAt  DateTime  @default(now())
+
+  @@index([level])
+  @@index([createdAt])
+  @@index([userId])
+}
+
 model User {
   id                   String         @id @default(cuid())
   username             String         @unique

@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canDownloadAttachment } from '@/lib/permissions'
 import { checkAttachmentDownloadRateLimit } from '@/lib/ratelimit'
+import { logError } from '@/lib/logger'
 import { validateCuid } from '@/lib/validation'
 import { readFile } from 'fs/promises'
 import { join, extname } from 'path'
@@ -67,7 +68,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     attachment.storagePath.includes('\\') ||
     attachment.storagePath.includes('..')
   ) {
-    console.error('Suspicious storagePath on attachment', params.attachmentId)
+    logError({ message: 'Suspicious storagePath on attachment', action: 'attachment_download', userId: session.user.id, meta: { attachmentId: params.attachmentId } })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
@@ -80,7 +81,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     if (code === 'ENOENT') {
       return NextResponse.json({ error: 'File not found' }, { status: 404 })
     }
-    console.error('Attachment file read error:', err)
+    logError({ message: 'Attachment file read error', action: 'attachment_download', userId: session.user.id, meta: { attachmentId: params.attachmentId, error: String(err) } })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 

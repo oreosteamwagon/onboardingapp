@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageAttachments } from '@/lib/permissions'
 import { checkTaskMgmtRateLimit } from '@/lib/ratelimit'
+import { logError } from '@/lib/logger'
 import { validateCuid } from '@/lib/validation'
 import { unlink } from 'fs/promises'
 import { join } from 'path'
@@ -76,7 +77,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     attachment.storagePath.includes('\\') ||
     attachment.storagePath.includes('..')
   ) {
-    console.error('Suspicious storagePath on attachment', attachment.id)
+    logError({ message: 'Suspicious storagePath on attachment', action: 'attachment_delete', userId: session.user.id, meta: { attachmentId: attachment.id } })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
@@ -87,7 +88,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     if (code === 'P2025') {
       return NextResponse.json({ error: 'Attachment not found' }, { status: 404 })
     }
-    console.error('Attachment delete DB error:', err)
+    logError({ message: 'Attachment delete DB error', action: 'attachment_delete', userId: session.user.id, meta: { error: String(err) } })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
@@ -96,7 +97,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException).code
     if (code !== 'ENOENT') {
-      console.error('Attachment file unlink error:', err)
+      logError({ message: 'Attachment file unlink error', action: 'attachment_delete', userId: session.user.id, meta: { error: String(err) } })
     }
     // ENOENT is tolerated — DB row is authoritative
   }

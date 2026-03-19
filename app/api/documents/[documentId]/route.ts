@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canDeleteDocument } from '@/lib/permissions'
 import { checkDocumentDeleteRateLimit } from '@/lib/ratelimit'
+import { logError, logAccess } from '@/lib/logger'
 import { validateCuid } from '@/lib/validation'
 import { unlink } from 'fs/promises'
 import { join } from 'path'
@@ -58,7 +59,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
       document.storagePath.includes('\\') ||
       document.storagePath.includes('..')
     ) {
-      console.error('Suspicious storagePath blocked during delete, documentId:', document.id)
+      logError({ message: 'Suspicious storagePath blocked during delete', action: 'document_delete', userId: session.user.id, meta: { documentId: document.id } })
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
 
@@ -71,16 +72,16 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     } catch (err) {
       const nodeErr = err as NodeJS.ErrnoException
       if (nodeErr.code !== 'ENOENT') {
-        console.error('Failed to delete document file, documentId:', document.id, err)
+        logError({ message: 'Failed to delete document file', action: 'document_delete', userId: session.user.id, meta: { documentId: document.id, error: String(err) } })
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
       }
-      console.warn('Document file already missing on disk, proceeding with DB delete, documentId:', document.id)
+      logError({ message: 'Document file already missing on disk, proceeding with DB delete', action: 'document_delete', userId: session.user.id, meta: { documentId: document.id } })
     }
   }
 
   await prisma.document.delete({ where: { id: document.id } })
 
-  console.info('Document deleted by admin, documentId:', document.id, 'filename:', document.filename, 'adminId:', session.user.id)
+  logAccess({ message: 'document deleted', action: 'document_delete', userId: session.user.id, path: `/api/documents/${document.id}`, statusCode: 204, meta: { documentId: document.id } })
 
   return new NextResponse(null, { status: 204 })
 }

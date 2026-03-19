@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageBranding } from '@/lib/permissions'
 import { saveUpload, UploadError } from '@/lib/upload'
+import { logError } from '@/lib/logger'
 import type { Role } from '@prisma/client'
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
       if (err instanceof UploadError) {
         return NextResponse.json({ error: err.message }, { status: err.statusCode })
       }
-      console.error('Logo upload error:', err)
+      logError({ message: 'Logo upload error', action: 'branding_update', userId: session.user.id, meta: { error: String(err) } })
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
   }

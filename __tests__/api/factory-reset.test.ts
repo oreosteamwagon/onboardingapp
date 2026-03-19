@@ -16,6 +16,7 @@ import { NextRequest } from 'next/server'
 // ---- Module mocks ----
 
 jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
+jest.mock('@/lib/logger', () => ({ logError: jest.fn(), logAccess: jest.fn(), log: jest.fn() }))
 
 const mockDeleteMany = jest.fn().mockResolvedValue({ count: 0 })
 const mockDocumentFindMany = jest.fn()

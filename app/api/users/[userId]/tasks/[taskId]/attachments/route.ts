@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageAttachments } from '@/lib/permissions'
 import { checkAttachmentUploadRateLimit } from '@/lib/ratelimit'
+import { logError } from '@/lib/logger'
 import { validateCuid } from '@/lib/validation'
 import { saveUpload, UploadError } from '@/lib/upload'
 import type { Role } from '@prisma/client'
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     if (err instanceof UploadError) {
       return NextResponse.json({ error: err.message }, { status: err.statusCode })
     }
-    console.error('Attachment upload error:', err)
+    logError({ message: 'Attachment upload error', action: 'attachment_upload', userId: session.user.id, meta: { error: String(err) } })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
@@ -115,7 +116,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       { status: 201 },
     )
   } catch (err) {
-    console.error('Attachment DB create error:', err)
+    logError({ message: 'Attachment DB create error', action: 'attachment_upload', userId: session.user.id, meta: { error: String(err) } })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

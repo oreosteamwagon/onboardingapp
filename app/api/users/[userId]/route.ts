@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageUsers } from '@/lib/permissions'
 import { checkUserProfileUpdateRateLimit } from '@/lib/ratelimit'
+import { logError } from '@/lib/logger'
 import { validateName, validateDepartment, validatePositionCode } from '@/lib/validation'
 import type { Role } from '@prisma/client'
 
@@ -144,7 +145,7 @@ export async function PATCH(
     ) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
-    console.error('Update user error:', err)
+    logError({ message: 'Update user error', action: 'user_update', userId: session.user.id, meta: { error: String(err) } })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

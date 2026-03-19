@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageDocumentCategories } from '@/lib/permissions'
 import { checkCategoryMgmtRateLimit } from '@/lib/ratelimit'
+import { logError } from '@/lib/logger'
 import { validateCategoryName, categoryNameToSlug } from '@/lib/validation'
 import type { Role } from '@prisma/client'
 import { Prisma } from '@prisma/client'
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       return NextResponse.json({ error: 'A category with that name already exists' }, { status: 409 })
     }
-    console.error('Failed to create document category:', err)
+    logError({ message: 'Failed to create document category', action: 'category_create', userId: session.user.id, meta: { error: String(err) } })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

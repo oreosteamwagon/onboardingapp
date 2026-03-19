@@ -54,6 +54,12 @@ export default async function AdminPage() {
       show: isAdmin,
     },
     {
+      href: '/admin/logs',
+      label: 'Logs',
+      description: 'View structured application logs for security auditing and diagnostics.',
+      show: isAdmin,
+    },
+    {
       href: '/admin/reset',
       label: 'Reset',
       description: 'Factory reset — restores the application to its initial seeded state.',

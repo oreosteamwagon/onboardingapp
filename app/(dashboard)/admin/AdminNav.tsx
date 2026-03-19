@@ -27,6 +27,7 @@ export default function AdminNav({ role }: AdminNavProps) {
     { href: '/admin/users',               label: 'Users',      show: isAdmin },
     { href: '/admin/branding',            label: 'Branding',   show: isAdmin },
     { href: '/admin/document-categories', label: 'Categories', show: isAdmin },
+    { href: '/admin/logs',                label: 'Logs',       show: isAdmin },
     { href: '/admin/reset',               label: 'Reset',      show: isAdmin, danger: true },
   ]
 

@@ -24,6 +24,7 @@ import { Prisma } from '@prisma/client'
 // ---- Module mocks ----
 
 jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
+jest.mock('@/lib/logger', () => ({ logError: jest.fn(), logAccess: jest.fn(), log: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
     documentCategory: {

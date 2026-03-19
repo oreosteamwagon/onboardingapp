@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canDownloadDocument } from '@/lib/permissions'
 import { checkDocumentDownloadRateLimit } from '@/lib/ratelimit'
+import { logError } from '@/lib/logger'
 import { validateCuid } from '@/lib/validation'
 import { readFile } from 'fs/promises'
 import { join, extname } from 'path'
@@ -71,7 +72,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     document.storagePath.includes('\\') ||
     document.storagePath.includes('..')
   ) {
-    console.error('Suspicious storagePath in document', document.id)
+    logError({ message: 'Suspicious storagePath in document', action: 'document_download', userId: session.user.id, meta: { documentId: document.id } })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 

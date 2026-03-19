@@ -168,3 +168,9 @@ const certificateLimiter = new RateLimiterMemory({ points: 60, duration: 60, blo
 export async function checkCertificateRateLimit(userId: string): Promise<void> {
   await certificateLimiter.consume(userId)
 }
+
+// 30 log reads per minute per ADMIN user
+const logReadLimiter = new RateLimiterMemory({ points: 30, duration: 60, blockDuration: 60 })
+export async function checkLogReadRateLimit(userId: string): Promise<void> {
+  await logReadLimiter.consume(userId)
+}

@@ -196,3 +196,35 @@ export function categoryNameToSlug(name: string): string {
     .replace(/-{2,}/g, '-')
     .replace(/^-|-$/g, '')
 }
+
+const VALID_LOG_LEVELS = ['ERROR', 'ACCESS', 'LOG'] as const
+export type ValidLogLevel = typeof VALID_LOG_LEVELS[number]
+
+export function validateLogLevel(v: unknown): string | null {
+  if (v === undefined || v === null) return null
+  if (!(VALID_LOG_LEVELS as readonly string[]).includes(v as string))
+    return `level must be one of: ${VALID_LOG_LEVELS.join(', ')}`
+  return null
+}
+
+export function validateIsoDate(v: unknown, fieldName: string): string | null {
+  if (v === undefined || v === null) return null
+  if (typeof v !== 'string') return `${fieldName} must be a string`
+  if (!Number.isFinite(new Date(v).getTime())) return `${fieldName} must be a valid ISO date`
+  return null
+}
+
+// Returns { value: number } | { error: string }
+export function validatePageParam(v: unknown, max = 9999): { value: number } | { error: string } {
+  if (v === undefined || v === null) return { value: 1 }
+  const n = Number(v)
+  if (!Number.isInteger(n) || n < 1) return { error: 'page must be a positive integer' }
+  return { value: Math.min(n, max) }
+}
+
+export function validateLimitParam(v: unknown, maxLimit: number): { value: number } | { error: string } {
+  if (v === undefined || v === null) return { value: maxLimit }
+  const n = Number(v)
+  if (!Number.isInteger(n) || n < 1 || n > maxLimit) return { error: `limit must be between 1 and ${maxLimit}` }
+  return { value: n }
+}

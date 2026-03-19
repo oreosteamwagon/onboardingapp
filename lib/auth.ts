@@ -3,6 +3,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import argon2 from 'argon2'
 import { prisma } from '@/lib/db'
 import { authConfig } from '@/auth.config'
+import { logAccess } from '@/lib/logger'
 import type { Role } from '@prisma/client'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -48,6 +49,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             '$argon2id$v=19$m=65536,t=3,p=4$dummy$dummy',
             password,
           ).catch(() => false)
+          logAccess({ message: 'login failed: user not found or inactive', action: 'login_failure', path: '/api/auth/callback/credentials' })
           return null
         }
 
@@ -58,7 +60,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null
         }
 
-        if (!valid) return null
+        if (!valid) {
+          logAccess({ message: 'login failed: invalid password', action: 'login_failure', path: '/api/auth/callback/credentials' })
+          return null
+        }
 
         return {
           id: user.id,

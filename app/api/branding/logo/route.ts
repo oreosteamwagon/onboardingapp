@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { checkLogoRateLimit } from '@/lib/ratelimit'
+import { logError } from '@/lib/logger'
 import { readFile } from 'fs/promises'
 import { join, extname } from 'path'
 
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
     storagePath.includes('\\') ||
     storagePath.includes('..')
   ) {
-    console.error('Suspicious logoPath detected in branding settings')
+    logError({ message: 'Suspicious logoPath detected in branding settings', action: 'logo_serve' })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest) {
   if (!contentType) {
     // Extension is not in the image allowlist — should never happen if
     // saveUpload is always used, but fail closed if it does.
-    console.error('Non-image extension in branding logoPath:', ext)
+    logError({ message: 'Non-image extension in branding logoPath', action: 'logo_serve', meta: { ext } })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 

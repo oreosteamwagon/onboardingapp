@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageUsers } from '@/lib/permissions'
 import { checkFactoryResetRateLimit } from '@/lib/ratelimit'
+import { logError } from '@/lib/logger'
 import { unlink } from 'fs/promises'
 import { join } from 'path'
 import type { Role } from '@prisma/client'
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
       await tx.user.deleteMany({ where: { role: { not: 'ADMIN' } } })
     })
   } catch (err) {
-    console.error('Factory reset transaction failed:', err)
+    logError({ message: 'Factory reset transaction failed', action: 'factory_reset', userId: session.user.id, meta: { error: String(err) } })
     return NextResponse.json({ error: 'Reset failed — no data was changed' }, { status: 500 })
   }
 
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
   for (const storagePath of storagePaths) {
     // Defense-in-depth: skip any path with separators (should never happen)
     if (storagePath.includes('/') || storagePath.includes('\\') || storagePath.includes('..')) {
-      console.error('Skipped suspicious storagePath during factory reset:', storagePath)
+      logError({ message: 'Skipped suspicious storagePath during factory reset', action: 'factory_reset', userId: session.user.id, meta: { storagePath } })
       fileErrors++
       continue
     }
@@ -106,7 +107,7 @@ export async function POST(req: NextRequest) {
       await unlink(join(UPLOAD_DIR, storagePath))
       filesDeleted++
     } catch (err) {
-      console.error('Failed to delete file during factory reset:', storagePath, err)
+      logError({ message: 'Failed to delete file during factory reset', action: 'factory_reset', userId: session.user.id, meta: { storagePath, error: String(err) } })
       fileErrors++
     }
   }

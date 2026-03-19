@@ -47,7 +47,7 @@ export default async function CertificatePage({ params }: PageProps) {
   }
 
   const branding = await prisma.brandingSetting.findFirst({
-    select: { orgName: true, logoPath: true, primaryColor: true, accentColor: true },
+    select: { orgName: true, logoPath: true, primaryColor: true },
   })
 
   const u = attempt.user
@@ -58,7 +58,6 @@ export default async function CertificatePage({ params }: PageProps) {
   const logoUrl = branding?.logoPath ? '/api/branding/logo' : null
   // Re-validate colors from DB before injecting into CSS (defense-in-depth)
   const primaryColor = sanitizeHexColor(branding?.primaryColor ?? '', '#2563eb')
-  const accentColor = sanitizeHexColor(branding?.accentColor ?? '', '#7c3aed')
 
   return (
     <>
@@ -89,7 +88,7 @@ export default async function CertificatePage({ params }: PageProps) {
           <p className="text-3xl font-bold text-gray-900 tracking-wide mb-2">{orgName}</p>
           <p className="text-xs uppercase tracking-widest text-gray-400 mb-8">presents this</p>
 
-          <h1 className="text-4xl font-bold mb-8" style={{ color: accentColor }}>Certificate of Completion</h1>
+          <h1 className="text-4xl font-bold mb-8" style={{ color: primaryColor }}>Certificate of Completion</h1>
 
           <p className="text-base text-gray-600 mb-2">This certifies that</p>
           <p className="text-3xl font-semibold text-gray-900 mb-2">{displayName}</p>

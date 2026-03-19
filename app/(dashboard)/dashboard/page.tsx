@@ -25,6 +25,10 @@ export default async function DashboardPage() {
   const showUserTable = canViewAllTasks(user.role as Role)
   const isPayrollPlus = canApproveAny(user.role as Role)
 
+  const pendingCount = isPayrollPlus
+    ? await prisma.userTask.count({ where: { completed: true, approvalStatus: 'PENDING' } })
+    : 0
+
   let pendingUsers: { id: string; username: string; completedCount: number; totalCount: number }[] = []
 
   if (showUserTable) {
@@ -61,7 +65,11 @@ export default async function DashboardPage() {
             href="/approvals"
             className="rounded-md bg-primary text-white px-4 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
           >
-            Approvals
+            Approvals{pendingCount > 0 && (
+              <span className="ml-1.5 inline-flex items-center rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold">
+                {pendingCount}
+              </span>
+            )}
           </Link>
         ) : (
           <>

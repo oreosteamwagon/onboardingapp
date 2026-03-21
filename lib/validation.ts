@@ -228,3 +228,64 @@ export function validateLimitParam(v: unknown, maxLimit: number): { value: numbe
   if (!Number.isInteger(n) || n < 1 || n > maxLimit) return { error: `limit must be between 1 and ${maxLimit}` }
   return { value: n }
 }
+
+// Allowlist of standard SMTP ports
+export const VALID_SMTP_PORTS = [25, 465, 587, 2525] as const
+export type ValidSmtpPort = typeof VALID_SMTP_PORTS[number]
+
+// Hostname: letters, digits, hyphens, dots — max 253 chars per RFC 1035
+// Also accepts bare IPv4 addresses (digits and dots)
+const SMTP_HOST_RE = /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/
+
+export function validateSmtpHost(v: unknown): string | null {
+  if (typeof v !== 'string' || v.trim().length === 0 || v.length > 253) {
+    return 'host is required and must be at most 253 characters'
+  }
+  if (!SMTP_HOST_RE.test(v.trim())) {
+    return 'host must be a valid hostname or IP address'
+  }
+  return null
+}
+
+export function validateSmtpPort(v: unknown): string | null {
+  if (!(VALID_SMTP_PORTS as readonly number[]).includes(v as number)) {
+    return `port must be one of: ${VALID_SMTP_PORTS.join(', ')}`
+  }
+  return null
+}
+
+// Email for from address — basic RFC 5321 shape, max 254 chars
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+export function validateFromAddress(v: unknown): string | null {
+  if (typeof v !== 'string' || v.trim().length === 0 || v.length > 254) {
+    return 'fromAddress is required and must be at most 254 characters'
+  }
+  if (!EMAIL_RE.test(v.trim())) {
+    return 'fromAddress must be a valid email address'
+  }
+  return null
+}
+
+export function validateFromName(v: unknown): string | null {
+  if (typeof v !== 'string' || v.trim().length === 0 || v.length > 128) {
+    return 'fromName is required and must be 1-128 characters'
+  }
+  return null
+}
+
+export function validateSmtpUsername(v: unknown): string | null {
+  if (v === undefined || v === null || v === '') return null
+  if (typeof v !== 'string' || v.length > 256) {
+    return 'username must be at most 256 characters'
+  }
+  return null
+}
+
+export function validateSmtpPassword(v: unknown): string | null {
+  if (v === undefined || v === null || v === '') return null
+  if (typeof v !== 'string' || v.length > 1024) {
+    return 'password must be at most 1024 characters'
+  }
+  return null
+}

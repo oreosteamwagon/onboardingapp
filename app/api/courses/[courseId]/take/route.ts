@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { checkTeamTasksRateLimit, checkCourseAttemptRateLimit } from '@/lib/ratelimit'
 import { sanitizeCourseHtml } from '@/lib/sanitize'
 import { validateCuid, validateAnswerSubmission } from '@/lib/validation'
+import { checkAndNotifyWorkflowCompletion } from '@/lib/email'
 import type { Role } from '@prisma/client'
 
 interface RouteContext {
@@ -251,6 +252,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
     return attempt
   })
+
+  if (passed) {
+    void checkAndNotifyWorkflowCompletion(session.user.id, taskId as string)
+  }
 
   return NextResponse.json({
     attemptId: result.id,

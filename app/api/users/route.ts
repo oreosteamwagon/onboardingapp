@@ -8,6 +8,7 @@ import argon2 from 'argon2'
 import { randomBytes } from 'crypto'
 import type { Role } from '@prisma/client'
 import { validateName, validateDepartment, validatePositionCode, validateCuid } from '@/lib/validation'
+import { notifyUserCreated } from '@/lib/email'
 
 const VALID_ROLES: Role[] = ['USER', 'PAYROLL', 'HR', 'SUPERVISOR', 'ADMIN']
 
@@ -174,6 +175,7 @@ export async function POST(req: NextRequest) {
     })
 
     log({ message: 'user created', action: 'user_create', userId: session.user.id, statusCode: 201, meta: { newUserId: user.id, role: user.role } })
+    void notifyUserCreated(user.id, tempPassword)
     return NextResponse.json({ user, tempPassword }, { status: 201 })
   } catch (err: unknown) {
     if (

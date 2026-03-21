@@ -180,3 +180,9 @@ const userCreateLimiter = new RateLimiterMemory({ points: 20, duration: 3600, bl
 export async function checkUserCreateRateLimit(userId: string): Promise<void> {
   await userCreateLimiter.consume(userId)
 }
+
+// 10 email settings changes or test sends per minute per admin
+const emailSettingsLimiter = new RateLimiterMemory({ points: 10, duration: 60, blockDuration: 60 })
+export async function checkEmailSettingsRateLimit(userId: string): Promise<void> {
+  await emailSettingsLimiter.consume(userId)
+}

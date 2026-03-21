@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { canAssignWorkflows } from '@/lib/permissions'
 import { checkWorkflowMgmtRateLimit } from '@/lib/ratelimit'
 import type { Role } from '@prisma/client'
+import { notifyWorkflowAssigned } from '@/lib/email'
 
 interface RouteContext {
   params: { userId: string }
@@ -153,5 +154,6 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return userWorkflow
   })
 
+  void notifyWorkflowAssigned(params.userId, workflowId)
   return NextResponse.json(result, { status: 201 })
 }

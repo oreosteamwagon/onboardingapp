@@ -5,6 +5,7 @@ import { canApprove, canApproveAny } from '@/lib/permissions'
 import { checkApprovalRateLimit } from '@/lib/ratelimit'
 import { validateApprovalAction } from '@/lib/validation'
 import type { Role, ApprovalStatus } from '@prisma/client'
+import { checkAndNotifyWorkflowCompletion } from '@/lib/email'
 
 interface RouteContext {
   params: { userTaskId: string }
@@ -135,6 +136,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: 'Task has already been processed by another approver' }, { status: 409 })
     }
     throw err
+  }
+
+  if (action === 'APPROVED') {
+    void checkAndNotifyWorkflowCompletion(userTask.userId, userTask.taskId)
   }
 
   return NextResponse.json(updated)

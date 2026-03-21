@@ -7,6 +7,7 @@ import { canCompleteUploadTask } from '@/lib/permissions'
 import { checkUploadRateLimit } from '@/lib/ratelimit'
 import { saveUpload, UploadError } from '@/lib/upload'
 import type { Role } from '@prisma/client'
+import { notifyApprovalNeeded } from '@/lib/email'
 
 interface RouteContext {
   params: { taskId: string }
@@ -134,6 +135,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
       return { userTask, documentId: doc.id, documentFilename: doc.filename }
     })
+
+    void notifyApprovalNeeded(session.user.id, taskId)
 
     return NextResponse.json(
       {

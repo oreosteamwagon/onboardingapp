@@ -12,6 +12,7 @@ import {
 } from '@/lib/validation'
 import { log } from '@/lib/logger'
 import type { Role, TaskType } from '@prisma/client'
+import { notifyApprovalNeeded } from '@/lib/email'
 
 // GET /api/tasks — list all onboarding task definitions (HR+ only)
 export async function GET() {
@@ -222,6 +223,10 @@ export async function PATCH(req: NextRequest) {
       completedAt: completed ? new Date() : null,
     },
   })
+
+  if (completed) {
+    void notifyApprovalNeeded(userId, taskId)
+  }
 
   return NextResponse.json(userTask)
 }

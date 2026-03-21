@@ -1,0 +1,46 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { processOverdueTasks } from '@/lib/email'
+import { logError, log } from '@/lib/logger'
+
+// POST /api/cron/overdue-tasks
+//
+// Protected by a shared secret in the X-Cron-Secret header.
+// Should be called by an external scheduler (Docker cron, Kubernetes CronJob,
+// system cron, or a hosted cron service) once per day.
+//
+// Security assumptions:
+//   - CRON_SECRET is a random string of at least 32 characters stored as an env var.
+//   - This endpoint is NOT accessible without the correct secret.
+//   - The endpoint is idempotent: re-running it will not send duplicate emails
+//     because it only processes tasks where overdueNotifiedAt IS NULL.
+export async function POST(req: NextRequest) {
+  const cronSecret = req.headers.get('x-cron-secret')
+
+  if (!process.env.CRON_SECRET) {
+    // Fail closed if CRON_SECRET is not configured
+    logError({ message: 'CRON_SECRET env var is not set', action: 'cron_overdue' })
+    return NextResponse.json({ error: 'Cron not configured' }, { status: 503 })
+  }
+
+  if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  try {
+    const result = await processOverdueTasks()
+    log({
+      message: 'Overdue task notifications processed',
+      action: 'cron_overdue',
+      statusCode: 200,
+      meta: { processed: result.processed, notified: result.notified },
+    })
+    return NextResponse.json(result)
+  } catch (err: unknown) {
+    logError({
+      message: 'Overdue task cron failed',
+      action: 'cron_overdue',
+      meta: { error: String(err) },
+    })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

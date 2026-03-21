@@ -82,6 +82,19 @@ model User {
   @@index([supervisorId])
 }
 
+model EmailSetting {
+  id          String   @id @default(cuid())
+  enabled     Boolean  @default(false)
+  host        String   @default("")
+  port        Int      @default(587)
+  secure      Boolean  @default(false)
+  username    String   @default("")
+  passwordEnc String   @default("")
+  fromAddress String   @default("")
+  fromName    String   @default("")
+  updatedAt   DateTime @updatedAt
+}
+
 model BrandingSetting {
   id           String   @id @default(cuid())
   orgName      String   @default("My Organization")
@@ -122,25 +135,28 @@ model OnboardingTask {
 }
 
 model UserTask {
-  id             String           @id @default(cuid())
-  userId         String
-  taskId         String
-  completed      Boolean          @default(false)
-  completedAt    DateTime?
-  documentId     String?          @unique
-  approvalStatus ApprovalStatus   @default(PENDING)
-  approvedAt     DateTime?
-  approvedById   String?
-  user           User             @relation(fields: [userId], references: [id])
-  task           OnboardingTask   @relation(fields: [taskId], references: [id])
-  document       Document?        @relation(fields: [documentId], references: [id])
-  approvedBy     User?            @relation("TaskApprover", fields: [approvedById], references: [id])
-  attachments    TaskAttachment[]
+  id                  String           @id @default(cuid())
+  userId              String
+  taskId              String
+  completed           Boolean          @default(false)
+  completedAt         DateTime?
+  documentId          String?          @unique
+  approvalStatus      ApprovalStatus   @default(PENDING)
+  approvedAt          DateTime?
+  approvedById        String?
+  createdAt           DateTime         @default(now())
+  overdueNotifiedAt   DateTime?
+  user                User             @relation(fields: [userId], references: [id])
+  task                OnboardingTask   @relation(fields: [taskId], references: [id])
+  document            Document?        @relation(fields: [documentId], references: [id])
+  approvedBy          User?            @relation("TaskApprover", fields: [approvedById], references: [id])
+  attachments         TaskAttachment[]
 
   @@unique([userId, taskId])
   @@index([userId])
   @@index([taskId])
   @@index([approvedById])
+  @@index([createdAt])
 }
 
 model Document {

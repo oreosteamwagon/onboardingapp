@@ -5,6 +5,7 @@ import { canManageWorkflows } from '@/lib/permissions'
 import { checkWorkflowMgmtRateLimit } from '@/lib/ratelimit'
 import { validateOrder } from '@/lib/validation'
 import type { Role } from '@prisma/client'
+import { notifyTaskAddedToWorkflow } from '@/lib/email'
 
 interface RouteContext {
   params: { workflowId: string }
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     include: { task: true },
   })
 
+  void notifyTaskAddedToWorkflow(params.workflowId, taskId)
   return NextResponse.json(workflowTask, { status: 201 })
 }
 

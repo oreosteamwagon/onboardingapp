@@ -24,8 +24,16 @@ export async function POST(_req: NextRequest) {
   if (!setting || !setting.enabled) {
     return NextResponse.json({ error: 'Email is not enabled. Save a valid configuration first.' }, { status: 409 })
   }
-  if (!setting.host || !setting.fromAddress) {
-    return NextResponse.json({ error: 'Email configuration is incomplete.' }, { status: 409 })
+
+  const provider = setting.provider ?? 'SMTP'
+  if (provider === 'ENTRA') {
+    if (!setting.entraTenantId || !setting.entraClientId || !setting.entraClientSecretEnc || !setting.fromAddress) {
+      return NextResponse.json({ error: 'Email configuration is incomplete.' }, { status: 409 })
+    }
+  } else {
+    if (!setting.host || !setting.fromAddress) {
+      return NextResponse.json({ error: 'Email configuration is incomplete.' }, { status: 409 })
+    }
   }
 
   // Fetch the admin's own email address to send the test to

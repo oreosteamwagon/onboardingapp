@@ -32,6 +32,16 @@ export function encryptSmtpPassword(plaintext: string): string {
   return [iv.toString('hex'), tag.toString('hex'), encrypted.toString('hex')].join(':')
 }
 
+/** Alias for encryptSmtpPassword — used for Entra ID client secrets. */
+export function encryptEntraClientSecret(plaintext: string): string {
+  return encryptSmtpPassword(plaintext)
+}
+
+/** Alias for decryptSmtpPassword — used for Entra ID client secrets. */
+export function decryptEntraClientSecret(encoded: string): string {
+  return decryptSmtpPassword(encoded)
+}
+
 /**
  * Decrypts a string produced by encryptSmtpPassword.
  * Throws if the format is invalid or authentication fails (tampered ciphertext).

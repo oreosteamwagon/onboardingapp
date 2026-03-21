@@ -5,12 +5,18 @@
  *   - Authentication: no session -> 401
  *   - Authorization: non-ADMIN role -> 403
  *   - GET: returns settings with passwordSet flag, never returns raw password
- *   - PUT: input validation (host, port, secure, fromAddress, fromName)
- *   - PUT: valid payload -> 200 with passwordSet flag
+ *   - GET: returns Entra fields with entraClientSecretSet flag, never returns secret
+ *   - PUT: input validation (host, port, secure, fromAddress, fromName) for SMTP
+ *   - PUT: input validation (entraTenantId, entraClientId GUID format) for ENTRA
+ *   - PUT: valid SMTP payload -> 200 with passwordSet flag
+ *   - PUT: valid ENTRA payload -> 200 with entraClientSecretSet flag
  *   - PUT: password omitted -> existing password preserved
+ *   - PUT: entraClientSecret omitted -> existing secret preserved
+ *   - PUT: invalidateEntraTokenCache called on every save
  *   - POST /test: email not enabled -> 409
  *   - POST /test: SMTP error -> 502
  *   - POST /test: success -> 200
+ *   - POST /test: ENTRA with missing secret -> 409
  *   - Rate limit exceeded -> 429
  */
 
@@ -36,16 +42,19 @@ jest.mock('@/lib/ratelimit', () => ({
 jest.mock('@/lib/encrypt', () => ({
   encryptSmtpPassword: jest.fn().mockReturnValue('iv:tag:cipher'),
   decryptSmtpPassword: jest.fn().mockReturnValue('plaintext'),
+  encryptEntraClientSecret: jest.fn().mockReturnValue('iv:tag:entracipher'),
+  decryptEntraClientSecret: jest.fn().mockReturnValue('entrasecretplain'),
 }))
 jest.mock('@/lib/email', () => ({
   sendTestEmail: jest.fn().mockResolvedValue(undefined),
+  invalidateEntraTokenCache: jest.fn(),
 }))
 
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { checkEmailSettingsRateLimit } from '@/lib/ratelimit'
-import { encryptSmtpPassword } from '@/lib/encrypt'
-import { sendTestEmail } from '@/lib/email'
+import { encryptSmtpPassword, encryptEntraClientSecret } from '@/lib/encrypt'
+import { sendTestEmail, invalidateEntraTokenCache } from '@/lib/email'
 import { GET, PUT } from '@/app/api/admin/email-settings/route'
 import { POST as testPOST } from '@/app/api/admin/email-settings/test/route'
 
@@ -55,7 +64,9 @@ const mockUpsert = prisma.emailSetting.upsert as jest.MockedFunction<typeof pris
 const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
 const mockCheckRateLimit = checkEmailSettingsRateLimit as jest.MockedFunction<typeof checkEmailSettingsRateLimit>
 const mockEncrypt = encryptSmtpPassword as jest.MockedFunction<typeof encryptSmtpPassword>
+const mockEncryptEntra = encryptEntraClientSecret as jest.MockedFunction<typeof encryptEntraClientSecret>
 const mockSendTestEmail = sendTestEmail as jest.MockedFunction<typeof sendTestEmail>
+const mockInvalidateEntraCache = invalidateEntraTokenCache as jest.MockedFunction<typeof invalidateEntraTokenCache>
 
 // ---- Helpers ----
 
@@ -85,6 +96,7 @@ function makeTestPostRequest(): NextRequest {
 
 const validPayload = {
   enabled: true,
+  provider: 'SMTP',
   host: 'smtp.example.com',
   port: 587,
   secure: false,
@@ -94,14 +106,45 @@ const validPayload = {
   fromName: 'OnboardingApp',
 }
 
+const validEntraPayload = {
+  enabled: true,
+  provider: 'ENTRA',
+  entraTenantId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+  entraClientId: '11111111-2222-3333-4444-555555555555',
+  entraClientSecret: 'supersecretvalue',
+  fromAddress: 'noreply@example.com',
+  fromName: 'OnboardingApp',
+}
+
 const mockSetting = {
   id: 'global',
   enabled: true,
+  provider: 'SMTP',
   host: 'smtp.example.com',
   port: 587,
   secure: false,
   username: 'user@example.com',
   passwordEnc: 'iv:tag:cipher',
+  entraTenantId: '',
+  entraClientId: '',
+  entraClientSecretEnc: '',
+  fromAddress: 'noreply@example.com',
+  fromName: 'OnboardingApp',
+  updatedAt: new Date(),
+}
+
+const mockEntraSetting = {
+  id: 'global',
+  enabled: true,
+  provider: 'ENTRA',
+  host: '',
+  port: 587,
+  secure: false,
+  username: '',
+  passwordEnc: '',
+  entraTenantId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+  entraClientId: '11111111-2222-3333-4444-555555555555',
+  entraClientSecretEnc: 'iv:tag:entracipher',
   fromAddress: 'noreply@example.com',
   fromName: 'OnboardingApp',
   updatedAt: new Date(),
@@ -133,9 +176,12 @@ describe('GET /api/admin/email-settings', () => {
     expect(res.status).toBe(200)
     const data = await res.json() as Record<string, unknown>
     expect(data.enabled).toBe(false)
+    expect(data.provider).toBe('SMTP')
     expect(data.port).toBe(587)
     expect(data.passwordSet).toBe(false)
+    expect(data.entraClientSecretSet).toBe(false)
     expect(data).not.toHaveProperty('passwordEnc')
+    expect(data).not.toHaveProperty('entraClientSecretEnc')
   })
 
   it('returns settings with passwordSet=true when password is stored, never returns raw password', async () => {
@@ -150,11 +196,24 @@ describe('GET /api/admin/email-settings', () => {
     expect(data.host).toBe('smtp.example.com')
     expect(data.port).toBe(587)
   })
+
+  it('returns entraClientSecretSet=true when secret is stored, never returns raw secret', async () => {
+    mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
+    mockFindUnique.mockResolvedValueOnce(mockEntraSetting as never)
+    const res = await GET()
+    expect(res.status).toBe(200)
+    const data = await res.json() as Record<string, unknown>
+    expect(data.provider).toBe('ENTRA')
+    expect(data.entraClientSecretSet).toBe(true)
+    expect(data).not.toHaveProperty('entraClientSecretEnc')
+    expect(data.entraTenantId).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')
+    expect(data.entraClientId).toBe('11111111-2222-3333-4444-555555555555')
+  })
 })
 
-// ---- PUT tests ----
+// ---- PUT tests (SMTP provider) ----
 
-describe('PUT /api/admin/email-settings', () => {
+describe('PUT /api/admin/email-settings (SMTP)', () => {
   beforeEach(() => jest.clearAllMocks())
 
   it('returns 401 when not authenticated', async () => {
@@ -183,6 +242,14 @@ describe('PUT /api/admin/email-settings', () => {
     const { enabled: _e, ...noEnabled } = validPayload
     const res = await PUT(makePutRequest(noEnabled))
     expect(res.status).toBe(400)
+  })
+
+  it('returns 400 for invalid provider', async () => {
+    mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
+    const res = await PUT(makePutRequest({ ...validPayload, provider: 'INVALID' }))
+    expect(res.status).toBe(400)
+    const data = await res.json() as { errors: string[] }
+    expect(data.errors.some((e) => e.includes('provider'))).toBe(true)
   })
 
   it('returns 400 for invalid host', async () => {
@@ -217,7 +284,7 @@ describe('PUT /api/admin/email-settings', () => {
     expect(data.errors.some((e) => e.includes('fromName'))).toBe(true)
   })
 
-  it('saves and encrypts password when provided', async () => {
+  it('saves and encrypts SMTP password when provided', async () => {
     mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
     mockFindUnique.mockResolvedValueOnce(null)
     mockUpsert.mockResolvedValueOnce({ ...mockSetting } as never)
@@ -235,12 +302,19 @@ describe('PUT /api/admin/email-settings', () => {
     const res = await PUT(makePutRequest({ ...validPayload, password: '' }))
     expect(res.status).toBe(200)
     expect(mockEncrypt).not.toHaveBeenCalled()
-    // Verify upsert was called without a passwordEnc override (preserved from existing)
     expect(mockUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         update: expect.not.objectContaining({ passwordEnc: expect.anything() }),
       }),
     )
+  })
+
+  it('calls invalidateEntraTokenCache on successful SMTP save', async () => {
+    mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
+    mockFindUnique.mockResolvedValueOnce(null)
+    mockUpsert.mockResolvedValueOnce({ ...mockSetting } as never)
+    await PUT(makePutRequest(validPayload))
+    expect(mockInvalidateEntraCache).toHaveBeenCalled()
   })
 
   it('returns valid response shape without sensitive fields', async () => {
@@ -251,11 +325,94 @@ describe('PUT /api/admin/email-settings', () => {
     const data = await res.json() as Record<string, unknown>
     expect(data).not.toHaveProperty('passwordEnc')
     expect(data).not.toHaveProperty('password')
+    expect(data).not.toHaveProperty('entraClientSecretEnc')
     expect(data).toHaveProperty('passwordSet')
+    expect(data).toHaveProperty('entraClientSecretSet')
     expect(data).toHaveProperty('host')
     expect(data).toHaveProperty('port')
     expect(data).toHaveProperty('fromAddress')
     expect(data).toHaveProperty('fromName')
+  })
+})
+
+// ---- PUT tests (ENTRA provider) ----
+
+describe('PUT /api/admin/email-settings (ENTRA)', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('returns 400 for invalid entraTenantId (not a GUID)', async () => {
+    mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
+    const res = await PUT(makePutRequest({ ...validEntraPayload, entraTenantId: 'not-a-guid' }))
+    expect(res.status).toBe(400)
+    const data = await res.json() as { errors: string[] }
+    expect(data.errors.some((e) => e.includes('entraTenantId'))).toBe(true)
+  })
+
+  it('returns 400 for invalid entraClientId (not a GUID)', async () => {
+    mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
+    const res = await PUT(makePutRequest({ ...validEntraPayload, entraClientId: 'not-a-guid' }))
+    expect(res.status).toBe(400)
+    const data = await res.json() as { errors: string[] }
+    expect(data.errors.some((e) => e.includes('entraClientId'))).toBe(true)
+  })
+
+  it('returns 400 for entraClientSecret exceeding max length', async () => {
+    mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
+    const res = await PUT(makePutRequest({ ...validEntraPayload, entraClientSecret: 'x'.repeat(257) }))
+    expect(res.status).toBe(400)
+    const data = await res.json() as { errors: string[] }
+    expect(data.errors.some((e) => e.includes('entraClientSecret'))).toBe(true)
+  })
+
+  it('returns 400 for missing fromAddress with ENTRA provider', async () => {
+    mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
+    const res = await PUT(makePutRequest({ ...validEntraPayload, fromAddress: '' }))
+    expect(res.status).toBe(400)
+    const data = await res.json() as { errors: string[] }
+    expect(data.errors.some((e) => e.includes('fromAddress'))).toBe(true)
+  })
+
+  it('does not require SMTP host when provider is ENTRA', async () => {
+    mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
+    mockFindUnique.mockResolvedValueOnce(null)
+    mockUpsert.mockResolvedValueOnce({ ...mockEntraSetting } as never)
+    // No host field in payload — should succeed
+    const res = await PUT(makePutRequest(validEntraPayload))
+    expect(res.status).toBe(200)
+  })
+
+  it('encrypts Entra client secret when provided', async () => {
+    mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
+    mockFindUnique.mockResolvedValueOnce(null)
+    mockUpsert.mockResolvedValueOnce({ ...mockEntraSetting } as never)
+    const res = await PUT(makePutRequest(validEntraPayload))
+    expect(res.status).toBe(200)
+    expect(mockEncryptEntra).toHaveBeenCalledWith('supersecretvalue')
+    const data = await res.json() as { entraClientSecretSet: boolean; provider: string }
+    expect(data.provider).toBe('ENTRA')
+    expect(data.entraClientSecretSet).toBe(true)
+  })
+
+  it('preserves existing Entra secret when entraClientSecret is empty', async () => {
+    mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
+    mockFindUnique.mockResolvedValueOnce(mockEntraSetting as never)
+    mockUpsert.mockResolvedValueOnce({ ...mockEntraSetting } as never)
+    const res = await PUT(makePutRequest({ ...validEntraPayload, entraClientSecret: '' }))
+    expect(res.status).toBe(200)
+    expect(mockEncryptEntra).not.toHaveBeenCalled()
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.not.objectContaining({ entraClientSecretEnc: expect.anything() }),
+      }),
+    )
+  })
+
+  it('calls invalidateEntraTokenCache on successful ENTRA save', async () => {
+    mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
+    mockFindUnique.mockResolvedValueOnce(null)
+    mockUpsert.mockResolvedValueOnce({ ...mockEntraSetting } as never)
+    await PUT(makePutRequest(validEntraPayload))
+    expect(mockInvalidateEntraCache).toHaveBeenCalled()
   })
 })
 
@@ -292,9 +449,23 @@ describe('POST /api/admin/email-settings/test', () => {
     expect(res.status).toBe(409)
   })
 
-  it('returns 409 when host is missing', async () => {
+  it('returns 409 when SMTP host is missing', async () => {
     mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
     mockFindUnique.mockResolvedValueOnce({ ...mockSetting, host: '' } as never)
+    const res = await testPOST(makeTestPostRequest())
+    expect(res.status).toBe(409)
+  })
+
+  it('returns 409 when ENTRA tenantId is missing', async () => {
+    mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
+    mockFindUnique.mockResolvedValueOnce({ ...mockEntraSetting, entraTenantId: '' } as never)
+    const res = await testPOST(makeTestPostRequest())
+    expect(res.status).toBe(409)
+  })
+
+  it('returns 409 when ENTRA client secret is missing', async () => {
+    mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
+    mockFindUnique.mockResolvedValueOnce({ ...mockEntraSetting, entraClientSecretEnc: '' } as never)
     const res = await testPOST(makeTestPostRequest())
     expect(res.status).toBe(409)
   })

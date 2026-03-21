@@ -21,11 +21,15 @@ export default async function EmailSettingsPage() {
 
   const initial = {
     enabled: setting?.enabled ?? false,
+    provider: (setting?.provider ?? 'SMTP') as 'SMTP' | 'ENTRA',
     host: setting?.host ?? '',
     port: setting?.port ?? 587,
     secure: setting?.secure ?? false,
     username: setting?.username ?? '',
     passwordSet: (setting?.passwordEnc?.length ?? 0) > 0,
+    entraTenantId: setting?.entraTenantId ?? '',
+    entraClientId: setting?.entraClientId ?? '',
+    entraClientSecretSet: (setting?.entraClientSecretEnc?.length ?? 0) > 0,
     fromAddress: setting?.fromAddress ?? '',
     fromName: setting?.fromName ?? '',
   }

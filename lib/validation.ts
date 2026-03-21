@@ -289,3 +289,31 @@ export function validateSmtpPassword(v: unknown): string | null {
   }
   return null
 }
+
+const VALID_EMAIL_PROVIDERS = ['SMTP', 'ENTRA'] as const
+export type ValidEmailProvider = typeof VALID_EMAIL_PROVIDERS[number]
+
+export function validateEmailProvider(v: unknown): string | null {
+  if (!(VALID_EMAIL_PROVIDERS as readonly string[]).includes(v as string)) {
+    return `provider must be one of: ${VALID_EMAIL_PROVIDERS.join(', ')}`
+  }
+  return null
+}
+
+// Azure AD GUID: 8-4-4-4-12 hex digits (case-insensitive)
+const AZURE_GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export function validateAzureGuid(v: unknown, fieldName: string): string | null {
+  if (typeof v !== 'string' || !AZURE_GUID_RE.test(v)) {
+    return `${fieldName} must be a valid Azure AD GUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)`
+  }
+  return null
+}
+
+export function validateEntraClientSecret(v: unknown): string | null {
+  if (v === undefined || v === null || v === '') return null
+  if (typeof v !== 'string' || v.length > 256) {
+    return 'entraClientSecret must be at most 256 characters'
+  }
+  return null
+}

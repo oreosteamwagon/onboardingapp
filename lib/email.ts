@@ -1,13 +1,14 @@
 import nodemailer from 'nodemailer'
 import { prisma } from '@/lib/db'
-import { decryptSmtpPassword } from '@/lib/encrypt'
+import { decryptSmtpPassword, decryptEntraClientSecret } from '@/lib/encrypt'
 import { logError } from '@/lib/logger'
 
 // ---------------------------------------------------------------------------
-// Internal types
+// Internal types — discriminated union by provider
 // ---------------------------------------------------------------------------
 
-interface LoadedSettings {
+interface SmtpSettings {
+  provider: 'SMTP'
   host: string
   port: number
   secure: boolean
@@ -17,11 +18,74 @@ interface LoadedSettings {
   fromName: string
 }
 
+interface EntraSettings {
+  provider: 'ENTRA'
+  tenantId: string
+  clientId: string
+  clientSecretEnc: string
+  fromAddress: string
+  fromName: string
+}
+
+type LoadedSettings = SmtpSettings | EntraSettings
+
 interface UserRef {
   email: string
   firstName?: string | null
   lastName?: string | null
   username: string
+}
+
+// ---------------------------------------------------------------------------
+// Entra ID token cache (module-level, server-side only)
+// ---------------------------------------------------------------------------
+
+let entraTokenCache: { accessToken: string; expiresAt: number } | null = null
+
+export function invalidateEntraTokenCache(): void {
+  entraTokenCache = null
+}
+
+async function getEntraAccessToken(settings: EntraSettings): Promise<string> {
+  if (entraTokenCache && entraTokenCache.expiresAt > Date.now() + 60_000) {
+    return entraTokenCache.accessToken
+  }
+
+  let clientSecret: string
+  try {
+    clientSecret = decryptEntraClientSecret(settings.clientSecretEnc)
+  } catch {
+    logError({ message: 'Failed to decrypt Entra client secret', action: 'email_send' })
+    throw new Error('Failed to decrypt Entra client secret')
+  }
+
+  const params = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: settings.clientId,
+    client_secret: clientSecret,
+    scope: 'https://graph.microsoft.com/.default',
+  })
+
+  const res = await fetch(
+    `https://login.microsoftonline.com/${encodeURIComponent(settings.tenantId)}/oauth2/v2.0/token`,
+    { method: 'POST', body: params },
+  )
+
+  if (!res.ok) {
+    logError({
+      message: 'Entra token request failed',
+      action: 'email_send',
+      statusCode: res.status,
+    })
+    throw new Error(`Entra token request failed with status ${res.status}`)
+  }
+
+  const json = await res.json() as { access_token: string; expires_in: number }
+  entraTokenCache = {
+    accessToken: json.access_token,
+    expiresAt: Date.now() + json.expires_in * 1000,
+  }
+  return entraTokenCache.accessToken
 }
 
 // ---------------------------------------------------------------------------
@@ -31,13 +95,77 @@ interface UserRef {
 async function loadSettings(): Promise<LoadedSettings | null> {
   const setting = await prisma.emailSetting.findFirst()
   if (!setting || !setting.enabled) return null
-  if (!setting.host || !setting.fromAddress) return null
-  return setting
+  if (!setting.fromAddress) return null
+
+  if (setting.provider === 'ENTRA') {
+    if (!setting.entraTenantId || !setting.entraClientId || !setting.entraClientSecretEnc) return null
+    return {
+      provider: 'ENTRA',
+      tenantId: setting.entraTenantId,
+      clientId: setting.entraClientId,
+      clientSecretEnc: setting.entraClientSecretEnc,
+      fromAddress: setting.fromAddress,
+      fromName: setting.fromName,
+    }
+  }
+
+  // Default: SMTP
+  if (!setting.host) return null
+  return {
+    provider: 'SMTP',
+    host: setting.host,
+    port: setting.port,
+    secure: setting.secure,
+    username: setting.username,
+    passwordEnc: setting.passwordEnc,
+    fromAddress: setting.fromAddress,
+    fromName: setting.fromName,
+  }
+}
+
+async function sendViaGraph(settings: EntraSettings, to: string, subject: string, html: string): Promise<void> {
+  const accessToken = await getEntraAccessToken(settings)
+
+  const body = {
+    message: {
+      subject,
+      body: { contentType: 'HTML', content: html },
+      toRecipients: [{ emailAddress: { address: to } }],
+      from: { emailAddress: { address: settings.fromAddress, name: settings.fromName } },
+    },
+    saveToSentItems: false,
+  }
+
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(settings.fromAddress)}/sendMail`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    },
+  )
+
+  if (res.status !== 202) {
+    logError({
+      message: 'Graph API sendMail failed',
+      action: 'email_send',
+      statusCode: res.status,
+    })
+    throw new Error(`Graph API sendMail failed with status ${res.status}`)
+  }
 }
 
 async function sendMail(to: string, subject: string, html: string): Promise<void> {
   const settings = await loadSettings()
   if (!settings) return
+
+  if (settings.provider === 'ENTRA') {
+    await sendViaGraph(settings, to, subject, html)
+    return
+  }
 
   let password = ''
   if (settings.passwordEnc) {
@@ -547,7 +675,7 @@ export async function sendTestEmail(toAddress: string): Promise<void> {
     emailHtml('Email Configuration Test', [
       'This is a test email sent from OnboardingApp.',
       '&nbsp;',
-      'If you received this message, your SMTP configuration is working correctly.',
+      'If you received this message, your email configuration is working correctly.',
     ]),
   )
 }

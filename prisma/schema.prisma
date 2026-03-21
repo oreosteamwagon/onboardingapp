@@ -83,16 +83,20 @@ model User {
 }
 
 model EmailSetting {
-  id          String   @id @default(cuid())
-  enabled     Boolean  @default(false)
-  host        String   @default("")
-  port        Int      @default(587)
-  secure      Boolean  @default(false)
-  username    String   @default("")
-  passwordEnc String   @default("")
-  fromAddress String   @default("")
-  fromName    String   @default("")
-  updatedAt   DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  enabled              Boolean  @default(false)
+  provider             String   @default("SMTP")
+  host                 String   @default("")
+  port                 Int      @default(587)
+  secure               Boolean  @default(false)
+  username             String   @default("")
+  passwordEnc          String   @default("")
+  entraTenantId        String   @default("")
+  entraClientId        String   @default("")
+  entraClientSecretEnc String   @default("")
+  fromAddress          String   @default("")
+  fromName             String   @default("")
+  updatedAt            DateTime @updatedAt
 }
 
 model BrandingSetting {

@@ -51,9 +51,9 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Document not found' }, { status: 404 })
   }
 
-  // Web links are not downloadable files — the URL is surfaced directly in the UI.
+  // Web links are not downloadable files — redirect to the URL directly.
   if (document.url) {
-    return NextResponse.json({ error: 'This resource is a web link, not a downloadable file' }, { status: 400 })
+    return NextResponse.redirect(document.url, { status: 302 })
   }
 
   const isUploader = session.user.id === document.uploadedBy

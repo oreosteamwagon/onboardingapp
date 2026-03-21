@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { canManageBranding } from '@/lib/permissions'
 import { saveUpload, UploadError } from '@/lib/upload'
 import { logError } from '@/lib/logger'
+import { verifyActiveSession } from '@/lib/session'
 import type { Role } from '@prisma/client'
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/
@@ -15,6 +16,10 @@ export async function POST(req: NextRequest) {
   }
 
   if (!canManageBranding(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

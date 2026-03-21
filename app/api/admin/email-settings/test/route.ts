@@ -36,12 +36,14 @@ export async function POST(_req: NextRequest) {
     }
   }
 
-  // Fetch the admin's own email address to send the test to
+  // Fetch the admin's own email address to send the test to.
+  // Also verify the session user is still active (JWT trust gap compensation).
   const admin = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { email: true },
+    select: { email: true, active: true },
   })
   if (!admin) return NextResponse.json({ error: 'Admin user not found' }, { status: 404 })
+  if (!admin.active) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
     await sendTestEmail(admin.email)

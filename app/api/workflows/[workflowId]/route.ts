@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageWorkflows, isAdmin } from '@/lib/permissions'
 import { checkWorkflowMgmtRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import { validateWorkflowName, validateDescription } from '@/lib/validation'
 import { log } from '@/lib/logger'
 import type { Role } from '@prisma/client'
@@ -19,6 +20,10 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   }
 
   if (!canManageWorkflows(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -47,6 +52,10 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
   }
 
   if (!canManageWorkflows(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -118,6 +127,10 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   }
 
   if (!isAdmin(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

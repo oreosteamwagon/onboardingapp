@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { canViewAnyCertificate } from '@/lib/permissions'
 import { checkCertificateRateLimit } from '@/lib/ratelimit'
 import { validateCuid, sanitizeHexColor } from '@/lib/validation'
+import { verifyActiveSession } from '@/lib/session'
 import type { Role } from '@prisma/client'
 
 interface RouteContext {
@@ -15,6 +16,10 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   try {

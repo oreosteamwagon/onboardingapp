@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { isAdmin } from '@/lib/permissions'
 import { checkLogReadRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import {
   validateLogLevel,
   validateIsoDate,
@@ -24,6 +25,10 @@ export async function GET(req: NextRequest) {
   }
 
   if (!isAdmin(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

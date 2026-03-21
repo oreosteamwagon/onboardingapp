@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageCourses } from '@/lib/permissions'
 import { checkCourseMgmtRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import { sanitizeCourseHtml, validateHtmlLength } from '@/lib/sanitize'
 import {
   validateTitle,
@@ -20,6 +21,9 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   if (!canManageCourses(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -51,6 +55,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   if (!canManageCourses(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

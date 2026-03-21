@@ -12,12 +12,12 @@ The application demonstrates a strong security foundation with consistent, layer
 
 **Findings overview:**
 
-| Severity | Count |
-|----------|-------|
-| High | 1 |
-| Medium | 3 |
-| Low | 4 |
-| Informational | 3 |
+| Severity | Count | Status |
+|----------|-------|--------|
+| High | 1 | Resolved |
+| Medium | 3 | Open |
+| Low | 4 | Open |
+| Informational | 3 | Acknowledged |
 
 ---
 
@@ -25,27 +25,23 @@ The application demonstrates a strong security foundation with consistent, layer
 
 ---
 
-### HIGH-01 — Deactivated and downgraded users retain access for up to 8 hours
+### HIGH-01 — Deactivated and downgraded users retain access for up to 8 hours — RESOLVED
 
-**File:** `auth.config.ts`, `middleware.ts`, all API routes
-**Risk:** A deactivated or demoted user continues to have full access to every route until their JWT expires.
+**File:** `lib/session.ts`, all API routes
+**Resolution date:** 2026-03-21
 
-**Detail:**
-The application uses JWT sessions with an 8-hour `maxAge`. The middleware validates the presence of a JWT but does not check whether the user is still active or whether their role matches what is in the database. Only the approvals route (`/api/approvals/[userTaskId]/route.ts`) performs a live database check:
+**Original finding:**
+The application used JWT sessions with an 8-hour `maxAge`. The middleware validated the presence of a JWT but did not check whether the user was still active. Only the approvals route performed a live database check.
 
-```typescript
-// Only in the approvals route
-const approver = await prisma.user.findUnique({
-  where: { id: session.user.id },
-  select: { id: true, active: true },
-})
-if (!approver || !approver.active) { ... }
-```
+**Fix applied:**
+A shared `verifyActiveSession(userId)` helper was added in `lib/session.ts`. It performs a single `prisma.user.findUnique` call selecting only `{ active: true }` and returns `false` if the user is missing or inactive. This helper is now called on every authenticated API route (30 route files, covering all handlers), in the canonical position immediately after the role check and before the rate limiter. Two special cases were handled:
 
-This means if an admin deactivates an employee (e.g., upon termination), or demotes an HR user, the user can continue to perform privileged actions — create tasks, manage workflows, approve submissions — for up to 8 hours.
+- `app/api/admin/email-settings/test/route.ts`: the active check was folded into the existing `prisma.user.findUnique` call that fetches the admin's email, avoiding a redundant second DB round-trip.
+- `app/api/approvals/[userTaskId]/route.ts`: the previous inline check was replaced with the helper, and the ordering was corrected so the active check now runs before the rate limiter (consistent with all other routes).
 
-**Recommendation:**
-Add an active-user and role-freshness check to every sensitive API route (or at minimum, to all routes that perform write operations). The most robust fix is a short-lived JWT (e.g., 15–30 minutes) paired with a silent refresh mechanism, or a server-side session store (e.g., database sessions via Auth.js) that allows immediate invalidation. If the 8-hour JWT is kept, every write-capable API route should perform the DB check that is currently only present in the approvals route.
+Routes with no role check (PATCH `/api/tasks`, GET+POST `/api/courses/[courseId]/take`, POST `/api/tasks/[taskId]/upload`, GET `/api/certificates/[attemptId]`, GET `/api/attachments/[attachmentId]/download`, GET `/api/users/[userId]/workflows`) have the active check inserted directly after the session/role guard.
+
+The two routes that are intentionally excluded from session-based auth remain unchanged: `app/api/branding/logo/route.ts` (public) and `app/api/cron/overdue-tasks/route.ts` (CRON_SECRET header auth).
 
 ---
 

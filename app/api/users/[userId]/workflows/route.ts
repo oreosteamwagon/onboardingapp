@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canAssignWorkflows } from '@/lib/permissions'
 import { checkWorkflowMgmtRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import type { Role } from '@prisma/client'
 import { notifyWorkflowAssigned } from '@/lib/email'
 
@@ -19,6 +20,10 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
   const isSelf = session.user.id === params.userId
   if (!isSelf && !canAssignWorkflows(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -46,6 +51,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   if (!canAssignWorkflows(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

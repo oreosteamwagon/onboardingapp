@@ -11,6 +11,7 @@ import {
   validateCuid,
 } from '@/lib/validation'
 import { log } from '@/lib/logger'
+import { verifyActiveSession } from '@/lib/session'
 import type { Role, TaskType } from '@prisma/client'
 import { notifyApprovalNeeded } from '@/lib/email'
 
@@ -22,6 +23,10 @@ export async function GET() {
   }
 
   if (!canManageTasks(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -45,6 +50,10 @@ export async function POST(req: NextRequest) {
   }
 
   if (!canManageTasks(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -137,6 +146,10 @@ export async function PATCH(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   let body: unknown

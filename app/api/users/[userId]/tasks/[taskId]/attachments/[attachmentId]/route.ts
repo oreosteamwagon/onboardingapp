@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageAttachments } from '@/lib/permissions'
 import { checkTaskMgmtRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import { logError } from '@/lib/logger'
 import { validateCuid } from '@/lib/validation'
 import { unlink } from 'fs/promises'
@@ -26,6 +27,10 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
 
   const role = session.user.role as Role
   if (!canManageAttachments(role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

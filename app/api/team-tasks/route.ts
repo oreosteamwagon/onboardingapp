@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canApprove, canApproveAny } from '@/lib/permissions'
 import { checkTeamTasksRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import type { Role } from '@prisma/client'
 
 export type WorkflowProgress = {
@@ -32,6 +33,10 @@ export async function GET() {
 
   const role = session.user.role as Role
   if (!canApprove(role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

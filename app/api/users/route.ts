@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { canManageUsers, roleRank } from '@/lib/permissions'
 import { checkUserCreateRateLimit } from '@/lib/ratelimit'
 import { logError, log } from '@/lib/logger'
+import { verifyActiveSession } from '@/lib/session'
 import argon2 from 'argon2'
 import { randomBytes } from 'crypto'
 import type { Role } from '@prisma/client'
@@ -46,6 +47,10 @@ export async function GET() {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  if (!await verifyActiveSession(session.user.id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const users = await prisma.user.findMany({
     orderBy: { createdAt: 'desc' },
     select: USER_SELECT,
@@ -61,6 +66,10 @@ export async function POST(req: NextRequest) {
   }
 
   if (!canManageUsers(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

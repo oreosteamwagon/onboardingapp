@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canApprove, canApproveAny } from '@/lib/permissions'
+import { verifyActiveSession } from '@/lib/session'
 import type { Role } from '@prisma/client'
 
 // GET /api/approvals — list tasks awaiting approval for the current user
@@ -16,6 +17,10 @@ export async function GET() {
   const role = session.user.role as Role
 
   if (!canApprove(role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

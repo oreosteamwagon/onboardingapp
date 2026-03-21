@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { checkTeamTasksRateLimit, checkCourseAttemptRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import { sanitizeCourseHtml } from '@/lib/sanitize'
 import { validateCuid, validateAnswerSubmission } from '@/lib/validation'
 import { checkAndNotifyWorkflowCompletion } from '@/lib/email'
@@ -16,6 +17,10 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   try {
@@ -95,6 +100,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   try {

@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageDocumentCategories } from '@/lib/permissions'
 import { checkCategoryMgmtRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import type { Role } from '@prisma/client'
 
 const VALID_ID_RE = /^[\w\-]{1,64}$/
@@ -17,6 +18,10 @@ export async function DELETE(
   }
 
   if (!canManageDocumentCategories(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

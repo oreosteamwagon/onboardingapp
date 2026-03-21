@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { canManageUsers, roleRank } from '@/lib/permissions'
 import { checkUserProfileUpdateRateLimit } from '@/lib/ratelimit'
 import { logError, log } from '@/lib/logger'
+import { verifyActiveSession } from '@/lib/session'
 import { validateName, validateDepartment, validatePositionCode, validateCuid } from '@/lib/validation'
 import type { Role } from '@prisma/client'
 
@@ -43,6 +44,10 @@ export async function PATCH(
   }
 
   if (!canManageUsers(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

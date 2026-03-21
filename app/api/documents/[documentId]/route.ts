@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canDeleteDocument } from '@/lib/permissions'
 import { checkDocumentDeleteRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import { logError, log } from '@/lib/logger'
 import { validateCuid } from '@/lib/validation'
 import { unlink } from 'fs/promises'
@@ -26,6 +27,10 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
 
   if (!canDeleteDocument(session.user.role as Role)) {
     return NextResponse.json({ error: 'Forbidden: admin role required' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   try {

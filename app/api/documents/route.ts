@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { canUploadDocuments, canViewAllDocuments } from '@/lib/permissions'
 import { saveUpload, UploadError } from '@/lib/upload'
 import { checkUploadRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import { logError, log } from '@/lib/logger'
 import { validateTitle, validateWebLinkUrl } from '@/lib/validation'
 import type { Role } from '@prisma/client'
@@ -12,6 +13,10 @@ export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const type = new URL(req.url).searchParams.get('type')
@@ -59,6 +64,10 @@ export async function POST(req: NextRequest) {
       { error: 'Forbidden: PAYROLL role or above required to upload documents' },
       { status: 403 },
     )
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   try {

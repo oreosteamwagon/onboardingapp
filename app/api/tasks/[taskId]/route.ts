@@ -11,6 +11,7 @@ import {
   validateCuid,
 } from '@/lib/validation'
 import { log } from '@/lib/logger'
+import { verifyActiveSession } from '@/lib/session'
 import type { Role, TaskType } from '@prisma/client'
 
 interface RouteContext {
@@ -25,6 +26,10 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   }
 
   if (!canManageTasks(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -56,6 +61,10 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
   }
 
   if (!canManageTasks(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -189,6 +198,10 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   }
 
   if (!isAdmin(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

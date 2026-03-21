@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageUsers } from '@/lib/permissions'
 import { checkFactoryResetRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import { logError, log } from '@/lib/logger'
 import { unlink } from 'fs/promises'
 import { join } from 'path'
@@ -27,6 +28,10 @@ export async function POST(req: NextRequest) {
   }
 
   if (!canManageUsers(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

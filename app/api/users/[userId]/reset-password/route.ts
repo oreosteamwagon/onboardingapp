@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageUsers } from '@/lib/permissions'
 import { checkPasswordResetRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import { validateCuid } from '@/lib/validation'
 import argon2 from 'argon2'
 import { randomBytes } from 'crypto'
@@ -23,6 +24,10 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
   }
 
   if (!canManageUsers(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

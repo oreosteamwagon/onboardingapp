@@ -5,6 +5,7 @@ import { canDownloadAttachment } from '@/lib/permissions'
 import { checkAttachmentDownloadRateLimit } from '@/lib/ratelimit'
 import { logError } from '@/lib/logger'
 import { validateCuid } from '@/lib/validation'
+import { verifyActiveSession } from '@/lib/session'
 import { readFile } from 'fs/promises'
 import { join, extname } from 'path'
 import type { Role } from '@prisma/client'
@@ -29,6 +30,10 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const idError = validateCuid(params.attachmentId, 'attachmentId')

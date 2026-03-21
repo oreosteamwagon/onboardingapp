@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageCourses, isAdmin } from '@/lib/permissions'
 import { checkCourseMgmtRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import { sanitizeCourseHtml, validateHtmlLength } from '@/lib/sanitize'
 import {
   validateCuid,
@@ -25,6 +26,9 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   if (!canManageCourses(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -53,6 +57,9 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   if (!canManageCourses(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -155,6 +162,9 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   if (!isAdmin(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

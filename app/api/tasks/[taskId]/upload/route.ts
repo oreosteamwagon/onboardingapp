@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db'
 import { canCompleteUploadTask } from '@/lib/permissions'
 import { checkUploadRateLimit } from '@/lib/ratelimit'
 import { saveUpload, UploadError } from '@/lib/upload'
+import { verifyActiveSession } from '@/lib/session'
 import type { Role } from '@prisma/client'
 import { notifyApprovalNeeded } from '@/lib/email'
 
@@ -26,6 +27,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   // 2. Authorization — any authenticated user may complete their own upload tasks
   if (!canCompleteUploadTask(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

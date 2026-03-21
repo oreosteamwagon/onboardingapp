@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canApprove, canApproveAny } from '@/lib/permissions'
 import { checkApprovalRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import { validateApprovalAction } from '@/lib/validation'
 import type { Role, ApprovalStatus } from '@prisma/client'
 import { checkAndNotifyWorkflowCompletion } from '@/lib/email'
@@ -26,19 +27,14 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  if (!await verifyActiveSession(session.user.id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   try {
     await checkApprovalRateLimit(session.user.id)
   } catch {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
-  }
-
-  // Active-user DB check — compensates for the JWT trust gap
-  const approver = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { id: true, active: true },
-  })
-  if (!approver || !approver.active) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   // Fetch the task to be approved

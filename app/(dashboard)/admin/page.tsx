@@ -60,6 +60,12 @@ export default async function AdminPage() {
       show: isAdmin,
     },
     {
+      href: '/admin/email',
+      label: 'Email',
+      description: 'Configure outgoing email (SMTP) for system notifications.',
+      show: isAdmin,
+    },
+    {
       href: '/admin/logs',
       label: 'Logs',
       description: 'View structured application logs for security auditing and diagnostics.',

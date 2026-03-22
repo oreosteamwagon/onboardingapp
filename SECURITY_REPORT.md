@@ -291,7 +291,7 @@ The following must be in place before internet-facing deployment:
 - [ ] **Set `NODE_ENV=production`** — enables `__Secure-` cookie prefix and `Secure` flag
 - [ ] **Set `LOG_LEVEL=ACCESS`** or `LOG_LEVEL=ERROR`** in production to reduce log volume
 - [ ] **Plan AppLog retention** — implement deletion of rows older than 90 days
-- [ ] **Address HIGH-01** — implement active-user DB checks across all write-capable routes, or reduce JWT maxAge
+- [x] **Address HIGH-01** — resolved in commit `31955e1` (active-user DB check on all authenticated routes)
 - [ ] **Address MEDIUM-01** — configure Redis-backed rate limiting before multi-instance deployment
 - [ ] **Address MEDIUM-03** — add per-username rate limiting to the login route
 - [ ] **Address LOW-01** — remove `uploads/` from the middleware matcher exclusion
@@ -300,4 +300,4 @@ The following must be in place before internet-facing deployment:
 
 ---
 
-*This report reflects the state of the codebase as of commit `6785d1b` (2026-03-21). It covers static analysis only. Dynamic testing (DAST), penetration testing, and dependency vulnerability scanning are recommended as separate activities before go-live.*
+*This report reflects the state of the codebase as of commit `31955e1` (2026-03-21). It covers static analysis only. Dynamic testing (DAST), penetration testing, and dependency vulnerability scanning are recommended as separate activities before go-live.*

@@ -25,6 +25,9 @@ yarn-error.log*
 # uploads
 uploads/
 
+# typescript
+tsconfig.tsbuildinfo
+
 # misc
 .DS_Store
 *.pem

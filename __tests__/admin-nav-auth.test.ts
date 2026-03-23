@@ -5,7 +5,7 @@
  * Individual sub-pages enforce finer permissions on top.
  *
  * Covers:
- *   - canManageTasks allowlist: USER and PAYROLL are denied; HR, SUPERVISOR, ADMIN are allowed
+ *   - canManageTasks allowlist: USER, PAYROLL, and SUPERVISOR are denied; HR and ADMIN are allowed
  *   - canManageWorkflows: HR and ADMIN allowed; SUPERVISOR and below denied
  *   - canManageUsers / canManageBranding: ADMIN only
  *   - canDeleteDocument: ADMIN only
@@ -37,8 +37,8 @@ describe('canManageTasks — admin layout access gate', () => {
     expect(canManageTasks(Role.HR)).toBe(true)
   })
 
-  it('allows SUPERVISOR', () => {
-    expect(canManageTasks(Role.SUPERVISOR)).toBe(true)
+  it('denies SUPERVISOR', () => {
+    expect(canManageTasks(Role.SUPERVISOR)).toBe(false)
   })
 
   it('allows ADMIN', () => {
@@ -61,8 +61,8 @@ describe('canManageWorkflows — Workflows tab visibility', () => {
     expect(canManageWorkflows(Role.HR)).toBe(true)
   })
 
-  it('allows SUPERVISOR (role hierarchy: SUPERVISOR > HR)', () => {
-    expect(canManageWorkflows(Role.SUPERVISOR)).toBe(true)
+  it('denies SUPERVISOR', () => {
+    expect(canManageWorkflows(Role.SUPERVISOR)).toBe(false)
   })
 
   it('allows ADMIN', () => {
@@ -175,8 +175,8 @@ describe('AdminNav tab visibility', () => {
     ].filter(Boolean) as string[]
   }
 
-  it('SUPERVISOR sees Tasks only', () => {
-    expect(visibleTabs(Role.SUPERVISOR)).toEqual(['Tasks'])
+  it('SUPERVISOR sees no tabs (denied at layout level)', () => {
+    expect(visibleTabs(Role.SUPERVISOR)).toEqual([])
   })
 
   it('HR sees Tasks and Workflows', () => {

@@ -20,7 +20,7 @@
  *   - 204 success: DB delete IS called when storagePath is null
  *
  * GET /api/documents/[documentId]/download (web link)
- *   - 400 returned when document.url is non-null
+ *   - 302 redirect to document.url when document.url is non-null
  */
 
 import { NextRequest } from 'next/server'
@@ -296,11 +296,11 @@ describe('DELETE /api/documents/[documentId] (web link)', () => {
 })
 
 // ============================================================
-// GET /api/documents/[documentId]/download — web link returns 400
+// GET /api/documents/[documentId]/download — web link redirects to url
 // ============================================================
 
 describe('GET /api/documents/[documentId]/download (web link)', () => {
-  it('returns 400 when document has a url (is a web link)', async () => {
+  it('redirects to document url when document has a url (is a web link)', async () => {
     mockAuth.mockResolvedValue(makeSession('PAYROLL') as never)
     mockDocFindUnique.mockResolvedValue({
       id: VALID_DOC_ID,
@@ -312,8 +312,7 @@ describe('GET /api/documents/[documentId]/download (web link)', () => {
     } as never)
 
     const res = await GET(makeDownloadRequest(), { params: { documentId: VALID_DOC_ID } })
-    expect(res.status).toBe(400)
-    const data = await res.json()
-    expect(data.error).toMatch(/web link/i)
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toBe('https://example.com/')
   })
 })

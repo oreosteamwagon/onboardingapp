@@ -19,12 +19,17 @@ import { NextRequest } from 'next/server'
 jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
+    user: { findUnique: jest.fn(), findMany: jest.fn() },
     onboardingTask: {
       findUnique: jest.fn(),
     },
     workflowTask: {
       findFirst: jest.fn(),
     },
+    userWorkflow: {
+      findMany: jest.fn(),
+    },
+    appLog: { create: jest.fn() },
     $transaction: jest.fn(),
   },
 }))
@@ -50,6 +55,8 @@ import { checkUploadRateLimit } from '@/lib/ratelimit'
 import { POST } from '@/app/api/tasks/[taskId]/upload/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
+const mockAppLogCreate = prisma.appLog.create as jest.MockedFunction<typeof prisma.appLog.create>
 const mockFindUnique = prisma.onboardingTask.findUnique as jest.MockedFunction<
   typeof prisma.onboardingTask.findUnique
 >
@@ -89,6 +96,11 @@ function makeFile(name = 'doc.pdf', type = 'application/pdf', size = 1024): File
 }
 
 // ============================================================
+
+beforeEach(() => {
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
+  mockAppLogCreate.mockResolvedValue({} as never)
+})
 
 describe('POST /api/tasks/[taskId]/upload', () => {
   it('returns 401 when not authenticated', async () => {

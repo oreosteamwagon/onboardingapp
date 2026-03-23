@@ -22,6 +22,7 @@ jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/logger', () => ({ logError: jest.fn(), logAccess: jest.fn(), log: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
+    user: { findUnique: jest.fn() },
     document: {
       findUnique: jest.fn(),
     },
@@ -41,6 +42,7 @@ import { readFile } from 'fs/promises'
 import { GET } from '@/app/api/documents/[documentId]/download/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
 const mockDocumentFindUnique = prisma.document.findUnique as jest.MockedFunction<
   typeof prisma.document.findUnique
 >
@@ -88,6 +90,7 @@ const PDF_BUFFER = Buffer.from('%PDF-1.4 fake pdf content')
 beforeEach(() => {
   jest.clearAllMocks()
   mockCheckRateLimit.mockResolvedValue(undefined)
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
   mockReadFile.mockResolvedValue(PDF_BUFFER as never)
   mockDocumentFindUnique.mockResolvedValue(MOCK_DOCUMENT as never)
 })

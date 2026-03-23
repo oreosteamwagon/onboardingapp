@@ -21,6 +21,7 @@ import { NextRequest } from 'next/server'
 jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
+    user: { findUnique: jest.fn() },
     userWorkflow: { findMany: jest.fn() },
     userTask: { findMany: jest.fn() },
   },
@@ -35,6 +36,7 @@ import { checkTeamTasksRateLimit } from '@/lib/ratelimit'
 import { GET } from '@/app/api/team-tasks/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
 const mockUserWorkflowFindMany = prisma.userWorkflow.findMany as jest.MockedFunction<
   typeof prisma.userWorkflow.findMany
 >
@@ -87,6 +89,7 @@ function makeAssignment(
 beforeEach(() => {
   jest.clearAllMocks()
   mockCheckRateLimit.mockResolvedValue(undefined)
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
 })
 
 describe('GET /api/team-tasks — authentication', () => {

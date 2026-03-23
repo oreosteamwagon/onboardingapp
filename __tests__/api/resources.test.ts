@@ -15,6 +15,7 @@ jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/logger', () => ({ logError: jest.fn(), logAccess: jest.fn(), log: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
+    user: { findUnique: jest.fn() },
     document: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -60,6 +61,7 @@ import { POST as postTask } from '@/app/api/tasks/route'
 import { PUT as putTask } from '@/app/api/tasks/[taskId]/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
 const mockDocumentFindMany = prisma.document.findMany as jest.MockedFunction<typeof prisma.document.findMany>
 const mockDocumentFindUnique = prisma.document.findUnique as jest.MockedFunction<typeof prisma.document.findUnique>
 const mockDocumentCreate = prisma.document.create as jest.MockedFunction<typeof prisma.document.create>
@@ -104,6 +106,7 @@ const PDF_BUFFER = Buffer.from('%PDF-1.4 fake content')
 
 beforeEach(() => {
   jest.clearAllMocks()
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
   mockReadFile.mockResolvedValue(PDF_BUFFER as never)
   mockCategoryFindUnique.mockResolvedValue({ id: 'cat1' } as never)
 })

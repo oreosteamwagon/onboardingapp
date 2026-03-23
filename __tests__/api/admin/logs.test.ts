@@ -20,6 +20,7 @@ const mockCheckLogReadRateLimit = jest.fn()
 
 jest.mock('@/lib/db', () => ({
   prisma: {
+    user: { findUnique: jest.fn() },
     appLog: {
       findMany: mockFindMany,
       count: mockCount,
@@ -32,9 +33,11 @@ jest.mock('@/lib/ratelimit', () => ({
 }))
 
 import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/db'
 import { GET } from '@/app/api/admin/logs/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
 
 function makeSession(role: string, id = 'admin-id') {
   return { user: { id, name: 'Admin', email: 'admin@test.com', role } }
@@ -60,6 +63,7 @@ const SAMPLE_LOG = {
 
 beforeEach(() => {
   mockAuth.mockResolvedValue(null)
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
   mockFindMany.mockResolvedValue([])
   mockCount.mockResolvedValue(0)
   mockCheckLogReadRateLimit.mockResolvedValue(undefined)

@@ -150,6 +150,10 @@ const mockEntraSetting = {
   updatedAt: new Date(),
 }
 
+beforeEach(() => {
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
+})
+
 // ---- GET tests ----
 
 describe('GET /api/admin/email-settings', () => {
@@ -473,7 +477,7 @@ describe('POST /api/admin/email-settings/test', () => {
   it('returns 502 when SMTP send fails', async () => {
     mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
     mockFindUnique.mockResolvedValueOnce(mockSetting as never)
-    mockUserFindUnique.mockResolvedValueOnce({ email: 'admin@test.com' } as never)
+    mockUserFindUnique.mockResolvedValueOnce({ email: 'admin@test.com', active: true } as never)
     mockSendTestEmail.mockRejectedValueOnce(new Error('Connection refused'))
     const res = await testPOST(makeTestPostRequest())
     expect(res.status).toBe(502)
@@ -484,7 +488,7 @@ describe('POST /api/admin/email-settings/test', () => {
   it('returns 200 and to address on success', async () => {
     mockAuth.mockResolvedValueOnce(makeAdminSession() as never)
     mockFindUnique.mockResolvedValueOnce(mockSetting as never)
-    mockUserFindUnique.mockResolvedValueOnce({ email: 'admin@test.com' } as never)
+    mockUserFindUnique.mockResolvedValueOnce({ email: 'admin@test.com', active: true } as never)
     mockSendTestEmail.mockResolvedValueOnce(undefined)
     const res = await testPOST(makeTestPostRequest())
     expect(res.status).toBe(200)

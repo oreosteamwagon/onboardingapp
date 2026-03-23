@@ -7,6 +7,7 @@ import { NextRequest } from 'next/server'
 jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
+    user: { findUnique: jest.fn() },
     course: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -23,6 +24,7 @@ jest.mock('@/lib/db', () => ({
     onboardingTask: {
       count: jest.fn(),
     },
+    appLog: { create: jest.fn() },
     $transaction: jest.fn(),
   },
 }))
@@ -40,6 +42,8 @@ import {
 } from '@/app/api/courses/[courseId]/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
+const mockAppLogCreate = prisma.appLog.create as jest.MockedFunction<typeof prisma.appLog.create>
 
 function makeSession(role: string, id = 'user-1') {
   return { user: { id, name: 'Test', email: 'test@test.com', role } }
@@ -77,6 +81,11 @@ const sampleCourse = {
 }
 
 const courseRouteCtx = { params: { courseId: 'c' + 'a'.repeat(24) } }
+
+beforeEach(() => {
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
+  mockAppLogCreate.mockResolvedValue({} as never)
+})
 
 // ============================================================
 // GET /api/courses

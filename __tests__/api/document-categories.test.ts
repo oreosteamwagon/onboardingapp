@@ -27,6 +27,7 @@ jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/logger', () => ({ logError: jest.fn(), logAccess: jest.fn(), log: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
+    user: { findUnique: jest.fn() },
     documentCategory: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -49,6 +50,7 @@ import { GET, POST } from '@/app/api/admin/document-categories/route'
 import { DELETE } from '@/app/api/admin/document-categories/[id]/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
 const mockFindMany = prisma.documentCategory.findMany as jest.MockedFunction<typeof prisma.documentCategory.findMany>
 const mockFindUnique = prisma.documentCategory.findUnique as jest.MockedFunction<typeof prisma.documentCategory.findUnique>
 const mockCreate = prisma.documentCategory.create as jest.MockedFunction<typeof prisma.documentCategory.create>
@@ -101,6 +103,7 @@ const MOCK_CUSTOM_CAT = { id: 'cstm-abc123', slug: 'it-onboarding', name: 'IT On
 beforeEach(() => {
   jest.clearAllMocks()
   mockCheckRateLimit.mockResolvedValue(undefined)
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
   mockFindMany.mockResolvedValue(MOCK_CATEGORIES as never)
   mockFindUnique.mockResolvedValue(MOCK_CUSTOM_CAT as never)
   mockCreate.mockResolvedValue(MOCK_CUSTOM_CAT as never)

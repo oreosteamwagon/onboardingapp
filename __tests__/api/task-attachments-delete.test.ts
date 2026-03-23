@@ -22,6 +22,7 @@ jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/logger', () => ({ logError: jest.fn(), logAccess: jest.fn(), log: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
+    user: { findUnique: jest.fn() },
     taskAttachment: {
       findUnique: jest.fn(),
       delete: jest.fn(),
@@ -42,6 +43,7 @@ import { unlink } from 'fs/promises'
 import { DELETE } from '@/app/api/users/[userId]/tasks/[taskId]/attachments/[attachmentId]/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
 const mockFindUnique = prisma.taskAttachment.findUnique as jest.MockedFunction<
   typeof prisma.taskAttachment.findUnique
 >
@@ -91,6 +93,7 @@ const MOCK_ATTACHMENT = {
 beforeEach(() => {
   jest.clearAllMocks()
   mockCheckRateLimit.mockResolvedValue(undefined)
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
   mockFindUnique.mockResolvedValue(MOCK_ATTACHMENT as never)
   mockDelete.mockResolvedValue(MOCK_ATTACHMENT as never)
   mockUnlink.mockResolvedValue(undefined)

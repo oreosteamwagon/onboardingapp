@@ -18,6 +18,7 @@ import { NextRequest } from 'next/server'
 jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
+    user: { findUnique: jest.fn(), findMany: jest.fn() },
     onboardingTask: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -32,12 +33,16 @@ jest.mock('@/lib/db', () => ({
     workflowTask: {
       findFirst: jest.fn(),
     },
+    userWorkflow: {
+      findMany: jest.fn(),
+    },
     course: {
       findUnique: jest.fn(),
     },
     document: {
       findUnique: jest.fn(),
     },
+    appLog: { create: jest.fn() },
   },
 }))
 jest.mock('@/lib/ratelimit', () => ({
@@ -55,6 +60,8 @@ import {
 } from '@/app/api/tasks/[taskId]/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
+const mockAppLogCreate = prisma.appLog.create as jest.MockedFunction<typeof prisma.appLog.create>
 const mockFindMany = prisma.onboardingTask.findMany as jest.MockedFunction<
   typeof prisma.onboardingTask.findMany
 >
@@ -110,6 +117,11 @@ const sampleTask = {
   createdAt: new Date(),
   updatedAt: new Date(),
 }
+
+beforeEach(() => {
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
+  mockAppLogCreate.mockResolvedValue({} as never)
+})
 
 // ============================================================
 // GET /api/tasks

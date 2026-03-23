@@ -24,6 +24,7 @@ jest.mock('@/lib/logger', () => ({ logError: jest.fn(), logAccess: jest.fn(), lo
 jest.mock('@/lib/db', () => ({
   prisma: {
     user: {
+      findUnique: jest.fn(),
       update: jest.fn(),
     },
   },
@@ -38,6 +39,7 @@ import { checkUserProfileUpdateRateLimit } from '@/lib/ratelimit'
 import { PATCH } from '@/app/api/users/[userId]/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
 const mockUserUpdate = prisma.user.update as jest.MockedFunction<typeof prisma.user.update>
 const mockCheckRateLimit = checkUserProfileUpdateRateLimit as jest.MockedFunction<
   typeof checkUserProfileUpdateRateLimit
@@ -193,6 +195,7 @@ describe('validatePositionCode', () => {
 beforeEach(() => {
   jest.clearAllMocks()
   mockCheckRateLimit.mockResolvedValue(undefined)
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
 })
 
 describe('PATCH /api/users/[userId] — authentication', () => {

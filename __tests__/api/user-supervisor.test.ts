@@ -92,6 +92,7 @@ beforeEach(() => {
   jest.clearAllMocks()
   mockCheckCreateLimit.mockResolvedValue(undefined)
   mockCheckUpdateLimit.mockResolvedValue(undefined)
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
 })
 
 // ---- POST /api/users — authorization ----
@@ -146,28 +147,32 @@ describe('POST /api/users — supervisorId validation', () => {
   })
 
   it('returns 400 when referenced user does not exist', async () => {
-    mockUserFindUnique.mockResolvedValueOnce(null)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce(null) // supervisor lookup
     const res = await POST(makePostRequest(VALID_POST_BODY))
     expect(res.status).toBe(400)
     expect((await res.json()).error).toMatch(/supervisorId/)
   })
 
   it('returns 400 when referenced user is inactive', async () => {
-    mockUserFindUnique.mockResolvedValueOnce({ role: 'SUPERVISOR', active: false } as never)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce({ role: 'SUPERVISOR', active: false } as never) // supervisor
     const res = await POST(makePostRequest(VALID_POST_BODY))
     expect(res.status).toBe(400)
     expect((await res.json()).error).toMatch(/supervisorId/)
   })
 
   it('returns 400 when referenced user has role USER (insufficient)', async () => {
-    mockUserFindUnique.mockResolvedValueOnce({ role: 'USER', active: true } as never)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce({ role: 'USER', active: true } as never) // supervisor
     const res = await POST(makePostRequest(VALID_POST_BODY))
     expect(res.status).toBe(400)
     expect((await res.json()).error).toMatch(/supervisorId/)
   })
 
   it('returns 201 with a valid active SUPERVISOR+ supervisorId', async () => {
-    mockUserFindUnique.mockResolvedValueOnce(SUPERVISOR_DB_RECORD as never)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce(SUPERVISOR_DB_RECORD as never) // supervisor lookup
     const createdUser = {
       id: VALID_USER_ID,
       username: 'jdoe',
@@ -192,14 +197,16 @@ describe('POST /api/users — supervisorId validation', () => {
   })
 
   it('accepts PAYROLL role as supervisor', async () => {
-    mockUserFindUnique.mockResolvedValueOnce({ role: 'PAYROLL', active: true } as never)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce({ role: 'PAYROLL', active: true } as never) // supervisor
     mockUserCreate.mockResolvedValueOnce({ id: VALID_USER_ID, supervisorId: VALID_SUPERVISOR_ID } as never)
     const res = await POST(makePostRequest(VALID_POST_BODY))
     expect(res.status).toBe(201)
   })
 
   it('accepts ADMIN role as supervisor', async () => {
-    mockUserFindUnique.mockResolvedValueOnce({ role: 'ADMIN', active: true } as never)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce({ role: 'ADMIN', active: true } as never) // supervisor
     mockUserCreate.mockResolvedValueOnce({ id: VALID_USER_ID, supervisorId: VALID_SUPERVISOR_ID } as never)
     const res = await POST(makePostRequest(VALID_POST_BODY))
     expect(res.status).toBe(201)
@@ -252,20 +259,23 @@ describe('PATCH /api/users/[userId] — supervisorId validation', () => {
   })
 
   it('returns 400 when referenced user is not SUPERVISOR+', async () => {
-    mockUserFindUnique.mockResolvedValueOnce({ role: 'USER', active: true } as never)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce({ role: 'USER', active: true } as never) // supervisor lookup
     const res = await PATCH(makePatchRequest({ supervisorId: VALID_SUPERVISOR_ID }), makeContext())
     expect(res.status).toBe(400)
     expect((await res.json()).error).toMatch(/supervisorId/)
   })
 
   it('returns 400 when referenced user is inactive', async () => {
-    mockUserFindUnique.mockResolvedValueOnce({ role: 'SUPERVISOR', active: false } as never)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce({ role: 'SUPERVISOR', active: false } as never) // supervisor
     const res = await PATCH(makePatchRequest({ supervisorId: VALID_SUPERVISOR_ID }), makeContext())
     expect(res.status).toBe(400)
   })
 
   it('returns 200 when changing to a valid SUPERVISOR+ user', async () => {
-    mockUserFindUnique.mockResolvedValueOnce(SUPERVISOR_DB_RECORD as never)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce(SUPERVISOR_DB_RECORD as never) // supervisor lookup
     const updatedUser = {
       id: VALID_USER_ID,
       supervisorId: VALID_SUPERVISOR_ID,
@@ -279,7 +289,8 @@ describe('PATCH /api/users/[userId] — supervisorId validation', () => {
   })
 
   it('passes supervisorId to prisma.user.update', async () => {
-    mockUserFindUnique.mockResolvedValueOnce(SUPERVISOR_DB_RECORD as never)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce(SUPERVISOR_DB_RECORD as never) // supervisor lookup
     mockUserUpdate.mockResolvedValueOnce({ id: VALID_USER_ID, supervisorId: VALID_SUPERVISOR_ID } as never)
     await PATCH(makePatchRequest({ supervisorId: VALID_SUPERVISOR_ID }), makeContext())
     expect(mockUserUpdate).toHaveBeenCalledWith(

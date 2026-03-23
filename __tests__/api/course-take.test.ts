@@ -8,12 +8,15 @@ import { NextRequest } from 'next/server'
 jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
+    user: { findUnique: jest.fn(), findMany: jest.fn() },
     workflowTask: { findFirst: jest.fn() },
     course: { findUnique: jest.fn() },
     onboardingTask: { findUnique: jest.fn() },
     courseQuestion: { findMany: jest.fn() },
     courseAttempt: { findMany: jest.fn(), count: jest.fn() },
     userTask: { upsert: jest.fn() },
+    userWorkflow: { findMany: jest.fn() },
+    appLog: { create: jest.fn() },
     $transaction: jest.fn(),
   },
 }))
@@ -27,6 +30,8 @@ import { prisma } from '@/lib/db'
 import { GET, POST } from '@/app/api/courses/[courseId]/take/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
+const mockAppLogCreate = prisma.appLog.create as jest.MockedFunction<typeof prisma.appLog.create>
 
 function makeSession(role = 'USER', id = 'user-1') {
   return { user: { id, name: 'Test', email: 'test@test.com', role } }
@@ -57,6 +62,12 @@ const courseQuestions = [
     ],
   },
 ]
+
+beforeEach(() => {
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
+  mockAppLogCreate.mockResolvedValue({} as never)
+  ;(prisma.userWorkflow.findMany as jest.Mock).mockResolvedValue([])
+})
 
 // ============================================================
 // GET /api/courses/[courseId]/take

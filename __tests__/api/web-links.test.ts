@@ -31,6 +31,7 @@ jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/logger', () => ({ logError: jest.fn(), logAccess: jest.fn(), log: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
+    user: { findUnique: jest.fn() },
     document: {
       findUnique: jest.fn(),
       create: jest.fn(),
@@ -70,6 +71,7 @@ import { DELETE } from '@/app/api/documents/[documentId]/route'
 import { GET } from '@/app/api/documents/[documentId]/download/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
 const mockDocCreate = prisma.document.create as jest.MockedFunction<typeof prisma.document.create>
 const mockDocFindUnique = prisma.document.findUnique as jest.MockedFunction<typeof prisma.document.findUnique>
 const mockDocDelete = prisma.document.delete as jest.MockedFunction<typeof prisma.document.delete>
@@ -112,6 +114,7 @@ const defaultCategory = { id: 'cat1' }
 
 beforeEach(() => {
   jest.clearAllMocks()
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
   mockCategoryFindUnique.mockResolvedValue(defaultCategory as never)
 })
 

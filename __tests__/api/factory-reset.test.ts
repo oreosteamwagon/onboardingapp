@@ -35,7 +35,8 @@ jest.mock('@/lib/db', () => ({
     course: { deleteMany: mockDeleteMany },
     workflow: { deleteMany: mockDeleteMany },
     documentCategory: { deleteMany: mockDeleteMany },
-    user: { deleteMany: mockDeleteMany },
+    user: { findUnique: jest.fn(), deleteMany: mockDeleteMany },
+    appLog: { deleteMany: mockDeleteMany },
   },
 }))
 
@@ -54,6 +55,7 @@ import { unlink } from 'fs/promises'
 import { POST } from '@/app/api/admin/factory-reset/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
 const mockCheckRateLimit = checkFactoryResetRateLimit as jest.MockedFunction<
   typeof checkFactoryResetRateLimit
 >
@@ -81,6 +83,7 @@ const VALID_BODY = { confirm: 'FACTORY_RESET' }
 beforeEach(() => {
   jest.clearAllMocks()
   mockCheckRateLimit.mockResolvedValue(undefined)
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
   mockDocumentFindMany.mockResolvedValue([])
 
   // Default: transaction executes the callback with the mock prisma

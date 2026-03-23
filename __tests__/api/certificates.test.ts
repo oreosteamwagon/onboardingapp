@@ -8,6 +8,7 @@ import { NextRequest } from 'next/server'
 jest.mock('@/lib/auth', () => ({ auth: jest.fn() }))
 jest.mock('@/lib/db', () => ({
   prisma: {
+    user: { findUnique: jest.fn() },
     courseAttempt: { findUnique: jest.fn() },
     brandingSetting: { findFirst: jest.fn() },
   },
@@ -21,6 +22,7 @@ import { prisma } from '@/lib/db'
 import { GET } from '@/app/api/certificates/[attemptId]/route'
 
 const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockUserFindUnique = prisma.user.findUnique as jest.MockedFunction<typeof prisma.user.findUnique>
 
 function makeSession(role: string, id = 'user-1') {
   return { user: { id, name: 'Test', email: 'test@test.com', role } }
@@ -48,6 +50,10 @@ const passedAttempt = {
   },
   course: { title: 'Safety Training' },
 }
+
+beforeEach(() => {
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
+})
 
 describe('GET /api/certificates/[attemptId]', () => {
   it('returns 401 when not authenticated', async () => {

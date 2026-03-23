@@ -169,14 +169,16 @@ describe('POST — input validation', () => {
 describe('POST — target user checks', () => {
   it('returns 404 when target user does not exist', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
-    mockUserFindUnique.mockResolvedValueOnce(null)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce(null) // target user lookup
     const res = await POST(await makeRequest(makeFile()), makeContext())
     expect(res.status).toBe(404)
   })
 
   it('returns 409 when target user is inactive', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
-    mockUserFindUnique.mockResolvedValueOnce(INACTIVE_USER as never)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce(INACTIVE_USER as never) // target user lookup
     const res = await POST(await makeRequest(makeFile()), makeContext())
     expect(res.status).toBe(409)
   })

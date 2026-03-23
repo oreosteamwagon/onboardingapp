@@ -78,6 +78,7 @@ beforeEach(() => {
   jest.clearAllMocks()
   mockCheckRateLimit.mockResolvedValue(undefined)
   mockArgon2Hash.mockResolvedValue('$argon2id$v=19$mock-hash' as never)
+  mockUserFindUnique.mockResolvedValue({ active: true } as never)
 })
 
 describe('POST /api/users/[userId]/reset-password — authentication', () => {
@@ -118,8 +119,9 @@ describe('POST /api/users/[userId]/reset-password — authorization', () => {
 
   it('allows ADMIN role to proceed past authorization', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('ADMIN') as never)
-    // Rate limit passes, user not found -> 404 (confirms auth passed)
-    mockUserFindUnique.mockResolvedValueOnce(null)
+    // verifyActiveSession consumes first findUnique; target user not found -> 404
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce(null) // target user lookup
     const res = await POST(makeRequest(), makeContext())
     expect(res.status).toBe(404)
   })
@@ -137,7 +139,8 @@ describe('POST /api/users/[userId]/reset-password — rate limiting', () => {
   it('keys rate limit on the admin user id, not the target user id', async () => {
     const adminId = 'admin-specific-id'
     mockAuth.mockResolvedValueOnce(makeSession('ADMIN', adminId) as never)
-    mockUserFindUnique.mockResolvedValueOnce(null)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce(null) // target user lookup
     await POST(makeRequest(), makeContext())
     expect(mockCheckRateLimit).toHaveBeenCalledWith(adminId)
   })
@@ -175,7 +178,8 @@ describe('POST /api/users/[userId]/reset-password — input validation', () => {
 describe('POST /api/users/[userId]/reset-password — object-level checks', () => {
   it('returns 404 when user does not exist', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('ADMIN') as never)
-    mockUserFindUnique.mockResolvedValueOnce(null)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce(null) // target user lookup
     const res = await POST(makeRequest(), makeContext())
     expect(res.status).toBe(404)
     expect((await res.json()).error).toBe('User not found')
@@ -183,7 +187,8 @@ describe('POST /api/users/[userId]/reset-password — object-level checks', () =
 
   it('returns 409 when user is inactive', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('ADMIN') as never)
-    mockUserFindUnique.mockResolvedValueOnce({ id: VALID_USER_ID, active: false } as never)
+    mockUserFindUnique.mockResolvedValueOnce({ active: true } as never) // verifyActiveSession
+    mockUserFindUnique.mockResolvedValueOnce({ id: VALID_USER_ID, active: false } as never) // target user
     const res = await POST(makeRequest(), makeContext())
     expect(res.status).toBe(409)
     const body = await res.json()

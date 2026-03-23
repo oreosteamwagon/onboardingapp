@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { BrandingProvider } from '@/components/BrandingProvider'
 import { prisma } from '@/lib/db'
+import { headers } from 'next/headers'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -26,11 +27,13 @@ export default async function RootLayout({
   children: React.ReactNode
 }) {
   const branding = await getBranding()
+  const nonce = headers().get('x-nonce') ?? ''
 
   return (
     <html lang="en">
       <head>
         <style
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `:root { --color-primary: ${sanitizeColor(branding?.primaryColor ?? '#2563eb')}; --color-accent: ${sanitizeColor(branding?.accentColor ?? '#7c3aed')}; }`,
           }}

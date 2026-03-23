@@ -1,29 +1,48 @@
 import { PrismaClient, Role } from '@prisma/client'
 import argon2 from 'argon2'
+import { randomBytes } from 'crypto'
 
 const prisma = new PrismaClient()
 
 async function main() {
-  const passwordHash = await argon2.hash('T34mw0rk!', {
-    type: argon2.argon2id,
-    memoryCost: 65536,
-    timeCost: 3,
-    parallelism: 4,
-  })
-
-  const admin = await prisma.user.upsert({
+  // Admin user: only create on first seed, never overwrite existing password
+  const existingAdmin = await prisma.user.findUnique({
     where: { username: 'admin' },
-    update: {},
-    create: {
-      username: 'admin',
-      email: 'admin@localhost',
-      passwordHash,
-      role: Role.ADMIN,
-      active: true,
-    },
+    select: { id: true },
   })
 
-  console.log('Seeded admin user:', admin.username)
+  if (existingAdmin) {
+    console.log('Admin user already seeded')
+  } else {
+    const envPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD
+    let plainPassword: string
+    if (envPassword && envPassword.trim().length > 0) {
+      plainPassword = envPassword
+      console.log('Admin password set from ADMIN_BOOTSTRAP_PASSWORD')
+    } else {
+      plainPassword = randomBytes(12).toString('base64url')
+      console.log(`Admin password (save this): ${plainPassword}`)
+    }
+
+    const passwordHash = await argon2.hash(plainPassword, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+      parallelism: 4,
+    })
+
+    await prisma.user.create({
+      data: {
+        username: 'admin',
+        email: 'admin@localhost',
+        passwordHash,
+        role: Role.ADMIN,
+        active: true,
+      },
+    })
+
+    console.log('Seeded admin user: admin')
+  }
 
   await prisma.brandingSetting.upsert({
     where: { id: 'default' },

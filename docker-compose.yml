@@ -4,10 +4,14 @@ services:
     ports:
       - "3000:3000"
     env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
     volumes:
       - uploads:/app/uploads
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -22,6 +26,15 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   uploads:

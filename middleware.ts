@@ -40,7 +40,10 @@ export default auth(function middleware(req: NextRequest & { auth: unknown }) {
 
   if (!PUBLIC_PATHS.some((p) => pathname.startsWith(p)) && !session?.user) {
     const loginUrl = new URL('/login', req.url)
-    loginUrl.searchParams.set('callbackUrl', pathname)
+    // Only pass relative, same-origin paths to prevent open redirect via the callbackUrl parameter.
+    if (pathname.startsWith('/') && !pathname.startsWith('//')) {
+      loginUrl.searchParams.set('callbackUrl', pathname)
+    }
     response = NextResponse.redirect(loginUrl)
   } else if (!PUBLIC_PATHS.some((p) => pathname.startsWith(p)) && pathname === '/') {
     response = NextResponse.redirect(new URL('/dashboard', req.url))

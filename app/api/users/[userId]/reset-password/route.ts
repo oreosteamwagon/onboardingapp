@@ -73,6 +73,11 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     data: { passwordHash },
   })
 
-  // Return plaintext once — never logged, never stored
-  return NextResponse.json({ tempPassword }, { status: 200 })
+  // Return plaintext once — never logged, never stored.
+  // Cache-Control: no-store prevents the credential from being retained in
+  // proxy caches or browser DevTools network history.
+  return NextResponse.json({ tempPassword }, {
+    status: 200,
+    headers: { 'Cache-Control': 'no-store, max-age=0' },
+  })
 }

@@ -113,6 +113,12 @@ export function canViewAnyCertificate(role: Role): boolean {
   return hasRole(role, Role.SUPERVISOR)
 }
 
+// Returns true if the value is a recognised Role enum member.
+// Use this to validate untrusted sources (e.g. JWT payload) before casting.
+export function isValidRole(role: unknown): role is Role {
+  return typeof role === 'string' && (Object.values(Role) as string[]).includes(role)
+}
+
 // Returns allowed roles from a comma-separated header or session
 export function assertRole(
   userRole: Role | undefined | null,

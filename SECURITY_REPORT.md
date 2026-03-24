@@ -405,7 +405,7 @@ The non-empty string checks in the GET, PUT, and DELETE handlers of `app/api/tas
 
 ### LOW-05 — No pagination on bulk read endpoints accessible to HR+
 
-**Status: Resolved** — commit `TBD`
+**Status: Resolved** — commit `a879272`
 
 **Files:** `app/api/courses/route.ts` (GET), `app/api/workflows/route.ts` (GET), `app/api/tasks/route.ts` (GET)
 
@@ -563,4 +563,4 @@ The following areas were reviewed and found to meet or exceed security best prac
 
 ---
 
-*Initial assessment: commit `667aefd` (2026-03-23). CRIT-01/MED-03 resolved: commit `6b1f0e5`. CRIT-02 resolved: commit `f359e52`. CRIT-03 resolved: commit `a87bee3`. HIGH-01 resolved: commit `240d9be`. HIGH-02 resolved: commit `234d6cb`. HIGH-03 resolved: commit `9ab94b3`. HIGH-04 resolved: commit `fc8501f`. MED-01 resolved: commit `af1a000`. MED-02 resolved: commit `721bd09`. MED-04 resolved: commit `a1458fd`. MED-05 resolved: commit `5a79b57`. MED-06 resolved: commit `b85e89c`. MED-07 documented: commit `d2f800e`. MED-08 resolved: commit `b894137`. LOW-01 resolved: commit `54ae4b7`. LOW-02 resolved: commit `2e65974`. LOW-03 resolved: commit `eb308b6`. LOW-04 resolved: commit `edf9bdf`. LOW-05 resolved: see separate commit. Report last updated: 2026-03-23. Covers static analysis only. Dynamic testing (DAST), penetration testing, and dependency vulnerability scanning (beyond `npm audit`) are recommended as separate activities before go-live.*
+*Initial assessment: commit `667aefd` (2026-03-23). CRIT-01/MED-03 resolved: commit `6b1f0e5`. CRIT-02 resolved: commit `f359e52`. CRIT-03 resolved: commit `a87bee3`. HIGH-01 resolved: commit `240d9be`. HIGH-02 resolved: commit `234d6cb`. HIGH-03 resolved: commit `9ab94b3`. HIGH-04 resolved: commit `fc8501f`. MED-01 resolved: commit `af1a000`. MED-02 resolved: commit `721bd09`. MED-04 resolved: commit `a1458fd`. MED-05 resolved: commit `5a79b57`. MED-06 resolved: commit `b85e89c`. MED-07 documented: commit `d2f800e`. MED-08 resolved: commit `b894137`. LOW-01 resolved: commit `54ae4b7`. LOW-02 resolved: commit `2e65974`. LOW-03 resolved: commit `eb308b6`. LOW-04 resolved: commit `edf9bdf`. LOW-05 resolved: commit `a879272`. Report last updated: 2026-03-23. Covers static analysis only. Dynamic testing (DAST), penetration testing, and dependency vulnerability scanning (beyond `npm audit`) are recommended as separate activities before go-live.*

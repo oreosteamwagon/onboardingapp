@@ -1,11 +1,8 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
 import { BrandingProvider } from '@/components/BrandingProvider'
 import { prisma } from '@/lib/db'
 import { headers } from 'next/headers'
-
-const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Onboarding App',
@@ -39,7 +36,7 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className={inter.className}>
+      <body>
         <BrandingProvider
           orgName={branding?.orgName ?? 'My Organization'}
           logoPath={branding?.logoPath ?? null}

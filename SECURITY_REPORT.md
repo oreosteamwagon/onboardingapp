@@ -15,7 +15,7 @@ The application demonstrates a strong overall security posture with consistent, 
 | Severity | Total | Open | Resolved |
 |----------|-------|------|----------|
 | Critical | 3 | 0 | 3 |
-| High | 4 | 4 | 0 |
+| High | 4 | 0 | 4 |
 | Medium | 8 | 7 | 1 |
 | Low | 5 | 5 | 0 |
 | Informational | 3 | — | — |
@@ -88,6 +88,8 @@ A `makeLimiter` factory in `lib/ratelimit.ts` returns `RateLimiterRedis` when `R
 
 ### HIGH-01 — Open redirect in login callback URL
 
+**Status: Resolved** — commit `240d9be`
+
 **Files:** `app/(auth)/login/LoginForm.tsx:12`, `middleware.ts:22`
 
 **Detail:**
@@ -109,21 +111,14 @@ The middleware that sets the `callbackUrl` parameter also performs no validation
 loginUrl.searchParams.set('callbackUrl', pathname)
 ```
 
-**Recommendation:**
-Validate that `callbackUrl` is a relative path before using it:
-```typescript
-function isSafeCallback(url: string): boolean {
-  return url.startsWith('/') && !url.startsWith('//')
-}
-const callbackUrl = isSafeCallback(searchParams.get('callbackUrl') ?? '')
-  ? searchParams.get('callbackUrl')!
-  : '/dashboard'
-```
-Apply the same check in middleware before setting the parameter.
+**Resolution:**
+`LoginForm.tsx` now reads `callbackUrl` into a `raw` variable and only uses it if it starts with `/` and does not start with `//`; anything else falls back to `/dashboard`. `middleware.ts` applies the same guard before setting the parameter on the login redirect URL (the value is `pathname` from a server-parsed URL and is inherently safe, but the guard is applied for consistency and defence in depth).
 
 ---
 
 ### HIGH-02 — Open redirect in document and attachment download for web links
+
+**Status: Resolved** — commit `234d6cb`
 
 **Files:** `app/api/documents/[documentId]/download/route.ts:60`, `app/api/attachments/[attachmentId]/download/route.ts`
 
@@ -137,25 +132,14 @@ if (document.url) {
 
 No validation is performed on the protocol or host of the stored URL. A URL such as `javascript:alert(1)`, `data:text/html,...`, or `https://attacker.com` stored in the database — whether through a compromised HR account or a future injection — would be followed by authenticated users' browsers.
 
-**Recommendation:**
-Validate the URL scheme before redirecting:
-```typescript
-if (document.url) {
-  try {
-    const parsed = new URL(document.url)
-    if (parsed.protocol !== 'https:') {
-      return NextResponse.json({ error: 'Invalid document URL' }, { status: 400 })
-    }
-  } catch {
-    return NextResponse.json({ error: 'Invalid document URL' }, { status: 400 })
-  }
-  return NextResponse.redirect(document.url, { status: 302 })
-}
-```
+**Resolution:**
+The document download route now parses `document.url` with `new URL()` and returns 400 if parsing fails or if the protocol is not `https:`. Only a valid `https:` URL proceeds to `NextResponse.redirect`. The attachments route has no `url` field and required no change.
 
 ---
 
 ### HIGH-03 — Password reset returns plaintext credential in JSON response body
+
+**Status: Resolved** — commit `9ab94b3`
 
 **File:** `app/api/users/[userId]/reset-password/route.ts:77`
 
@@ -172,12 +156,14 @@ The response does not include `Cache-Control: no-store`. This means the plaintex
 
 If an admin's workstation, browser, or any log pipeline is compromised, all temporary passwords ever issued are exposed.
 
-**Recommendation:**
-At minimum, add `Cache-Control: no-store, max-age=0` to the response and document that the admin must transmit the password via a secure out-of-band channel. The secure implementation is a token-based reset flow: generate a single-use, time-limited (e.g. 15-minute) reset token, store its hash in the database, and return a reset link. The user sets their own password by presenting the token.
+**Resolution:**
+`Cache-Control: no-store, max-age=0` is now set on the password reset response, instructing all caches (proxies and browsers) not to retain the response. The plaintext is still returned exactly once to the calling admin for out-of-band relay; a full token-based reset flow remains a future improvement.
 
 ---
 
 ### HIGH-04 — `verifyActiveSession` missing at route entry in email test endpoint
+
+**Status: Resolved** — commit `fc8501f`
 
 **File:** `app/api/admin/email-settings/test/route.ts`
 
@@ -192,13 +178,8 @@ if (!adminUser || !adminUser.active) { ... }
 
 This inconsistency means a deactivated admin can trigger this route and reach the email-sending code before being blocked. It also means the pattern is not uniformly enforced — a future developer may not notice the inline check and assume the route follows the standard pattern.
 
-**Recommendation:**
-Add the standard active session check immediately after the role check:
-```typescript
-if (!await verifyActiveSession(session.user.id)) {
-  return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-}
-```
+**Resolution:**
+`verifyActiveSession` is now called immediately after the role check, matching the pattern used by every other authenticated route. The `active` field was removed from the subsequent `prisma.user.findUnique` select and the now-redundant inline `if (!admin.active)` guard was removed.
 
 ---
 
@@ -561,11 +542,11 @@ The following areas were reviewed and found to meet or exceed security best prac
 - [x] **CRIT-01 resolved** — nonce-based CSP in middleware; `unsafe-inline`/`unsafe-eval` removed (commit `6b1f0e5`)
 - [x] **CRIT-02 resolved** — hardcoded seed password replaced with env var or generated random (commit `f359e52`)
 - [x] **CRIT-03 resolved** — Redis-backed rate limiters with `RateLimiterRedis`; Redis service in Docker Compose (commit `a87bee3`)
-- [ ] **Address HIGH-01** — validate `callbackUrl` parameter before internet-facing deployment
-- [ ] **Address HIGH-02** — validate web link URL scheme before internet-facing deployment
+- [x] **HIGH-01 resolved** — callbackUrl validated to relative same-origin path in LoginForm and middleware (commit `240d9be`)
+- [x] **HIGH-02 resolved** — document URL scheme validated to https: before redirect (commit `234d6cb`)
 - [ ] **Configure a log aggregator** (Datadog, Loki, CloudWatch) to ingest container stdout in JSON parse mode
 - [ ] **Review and restrict network access** — the PostgreSQL port must not be exposed outside the Docker network
 
 ---
 
-*Initial assessment: commit `667aefd` (2026-03-23). CRIT-01/MED-03 resolved: commit `6b1f0e5`. CRIT-02 resolved: commit `f359e52`. CRIT-03 resolved: commit `a87bee3`. Report last updated: 2026-03-23. Covers static analysis only. Dynamic testing (DAST), penetration testing, and dependency vulnerability scanning (beyond `npm audit`) are recommended as separate activities before go-live.*
+*Initial assessment: commit `667aefd` (2026-03-23). CRIT-01/MED-03 resolved: commit `6b1f0e5`. CRIT-02 resolved: commit `f359e52`. CRIT-03 resolved: commit `a87bee3`. HIGH-01 resolved: commit `240d9be`. HIGH-02 resolved: commit `234d6cb`. HIGH-03 resolved: commit `9ab94b3`. HIGH-04 resolved: commit `fc8501f`. Report last updated: 2026-03-23. Covers static analysis only. Dynamic testing (DAST), penetration testing, and dependency vulnerability scanning (beyond `npm audit`) are recommended as separate activities before go-live.*

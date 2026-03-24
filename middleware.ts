@@ -5,7 +5,7 @@ import type { NextRequest } from 'next/server'
 
 const { auth } = NextAuth(authConfig)
 
-const PUBLIC_PATHS = ['/login', '/api/auth', '/api/branding/logo']
+const PUBLIC_PATHS = ['/login', '/api/auth', '/api/branding/logo', '/api/csp-report']
 
 function buildCsp(nonce: string): string {
   return [
@@ -21,6 +21,7 @@ function buildCsp(nonce: string): string {
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
+    "report-uri /api/csp-report",
   ].join('; ')
 }
 

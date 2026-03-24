@@ -211,3 +211,9 @@ const emailSettingsLimiter = makeLimiter({ keyPrefix: 'rl:email-settings', point
 export async function checkEmailSettingsRateLimit(userId: string): Promise<void> {
   await emailSettingsLimiter.consume(userId)
 }
+
+// 30 CSP violation reports per minute per IP — unauthenticated endpoint, keyed by IP to prevent log flooding
+const cspReportLimiter = makeLimiter({ keyPrefix: 'rl:csp-report', points: 30, duration: 60, blockDuration: 60 })
+export async function checkCspReportRateLimit(ip: string): Promise<void> {
+  await cspReportLimiter.consume(ip)
+}

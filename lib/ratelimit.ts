@@ -217,3 +217,9 @@ const cspReportLimiter = makeLimiter({ keyPrefix: 'rl:csp-report', points: 30, d
 export async function checkCspReportRateLimit(ip: string): Promise<void> {
   await cspReportLimiter.consume(ip)
 }
+
+// 60 task completion toggles per minute per user — throttle on the PATCH /api/tasks endpoint
+const taskCompletionLimiter = makeLimiter({ keyPrefix: 'rl:task-completion', points: 60, duration: 60, blockDuration: 60 })
+export async function checkTaskCompletionRateLimit(userId: string): Promise<void> {
+  await taskCompletionLimiter.consume(userId)
+}

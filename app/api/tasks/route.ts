@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageTasks } from '@/lib/permissions'
-import { checkTaskMgmtRateLimit } from '@/lib/ratelimit'
+import { checkTaskMgmtRateLimit, checkTaskCompletionRateLimit } from '@/lib/ratelimit'
 import {
   validateTitle,
   validateDescription,
@@ -150,6 +150,12 @@ export async function PATCH(req: NextRequest) {
 
   if (!await verifyActiveSession(session.user.id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  try {
+    await checkTaskCompletionRateLimit(session.user.id)
+  } catch {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
 
   let body: unknown

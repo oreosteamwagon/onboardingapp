@@ -12,7 +12,10 @@ function buildCsp(nonce: string): string {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
     `style-src 'self' 'nonce-${nonce}'`,
-    "img-src 'self' data: blob: https:",
+    // Restrict to self, data URIs, and blobs only. External HTTPS images are
+    // excluded to prevent tracking pixels and data exfiltration via injected
+    // content. Course images should be embedded as data URIs or self-hosted.
+    "img-src 'self' data: blob:",
     "font-src 'self'",
     "connect-src 'self'",
     "frame-ancestors 'none'",

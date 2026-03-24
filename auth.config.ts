@@ -8,6 +8,15 @@ import type { Role } from '@prisma/client'
 // can be used at runtime in the edge environment where @prisma/client cannot run.
 // Must be updated if the schema enum changes.
 const VALID_ROLES = new Set(['USER', 'SUPERVISOR', 'PAYROLL', 'HR', 'ADMIN'])
+
+// True whenever the deployment is served over HTTPS, regardless of NODE_ENV.
+// Guards against misconfigured staging environments that use HTTPS but forget
+// to set NODE_ENV=production, which would otherwise strip the Secure flag and
+// transmit session tokens in plaintext.
+const isSecureContext =
+  process.env.NODE_ENV === 'production' ||
+  process.env.NEXTAUTH_URL?.startsWith('https:') === true
+
 export const authConfig = {
   trustHost: true,
   session: {
@@ -16,15 +25,15 @@ export const authConfig = {
   },
   cookies: {
     sessionToken: {
-      name:
-        process.env.NODE_ENV === 'production'
-          ? '__Secure-next-auth.session-token'
-          : 'next-auth.session-token',
+      // __Secure- prefix requires the Secure flag; use the same condition.
+      name: isSecureContext
+        ? '__Secure-next-auth.session-token'
+        : 'next-auth.session-token',
       options: {
         httpOnly: true,
         sameSite: 'strict' as const,
         path: '/',
-        secure: process.env.NODE_ENV === 'production',
+        secure: isSecureContext,
       },
     },
   },

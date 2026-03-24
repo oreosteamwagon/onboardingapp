@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { isAdmin } from '@/lib/permissions'
 import { checkEmailSettingsRateLimit } from '@/lib/ratelimit'
+import { verifyActiveSession } from '@/lib/session'
 import { sendTestEmail } from '@/lib/email'
 import type { Role } from '@prisma/client'
 
@@ -12,6 +13,7 @@ export async function POST(_req: NextRequest) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!isAdmin(session.user.role as Role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!await verifyActiveSession(session.user.id)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
     await checkEmailSettingsRateLimit(session.user.id)
@@ -37,13 +39,11 @@ export async function POST(_req: NextRequest) {
   }
 
   // Fetch the admin's own email address to send the test to.
-  // Also verify the session user is still active (JWT trust gap compensation).
   const admin = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { email: true, active: true },
+    select: { email: true },
   })
   if (!admin) return NextResponse.json({ error: 'Admin user not found' }, { status: 404 })
-  if (!admin.active) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
     await sendTestEmail(admin.email)

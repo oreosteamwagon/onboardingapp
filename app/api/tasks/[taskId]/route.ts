@@ -34,9 +34,8 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   }
 
   const { taskId } = params
-  if (typeof taskId !== 'string' || taskId.length === 0) {
-    return NextResponse.json({ error: 'Invalid task ID' }, { status: 400 })
-  }
+  const taskIdErr = validateCuid(taskId, 'taskId')
+  if (taskIdErr) return NextResponse.json({ error: taskIdErr }, { status: 400 })
 
   const task = await prisma.onboardingTask.findUnique({
     where: { id: taskId },
@@ -75,9 +74,8 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
   }
 
   const { taskId } = params
-  if (typeof taskId !== 'string' || taskId.length === 0) {
-    return NextResponse.json({ error: 'Invalid task ID' }, { status: 400 })
-  }
+  const taskIdErr = validateCuid(taskId, 'taskId')
+  if (taskIdErr) return NextResponse.json({ error: taskIdErr }, { status: 400 })
 
   const existing = await prisma.onboardingTask.findUnique({ where: { id: taskId } })
   if (!existing) {
@@ -212,9 +210,8 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   }
 
   const { taskId } = params
-  if (typeof taskId !== 'string' || taskId.length === 0) {
-    return NextResponse.json({ error: 'Invalid task ID' }, { status: 400 })
-  }
+  const taskIdErr = validateCuid(taskId, 'taskId')
+  if (taskIdErr) return NextResponse.json({ error: taskIdErr }, { status: 400 })
 
   const existing = await prisma.onboardingTask.findUnique({
     where: { id: taskId },

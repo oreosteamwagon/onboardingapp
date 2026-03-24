@@ -57,7 +57,18 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   }
 
   // Web links are not downloadable files — redirect to the URL directly.
+  // Validate the scheme first: only https: is permitted to prevent javascript:
+  // or data: URLs stored in the database from being followed by authenticated users.
   if (document.url) {
+    let parsed: URL
+    try {
+      parsed = new URL(document.url)
+    } catch {
+      return NextResponse.json({ error: 'Invalid document URL' }, { status: 400 })
+    }
+    if (parsed.protocol !== 'https:') {
+      return NextResponse.json({ error: 'Invalid document URL' }, { status: 400 })
+    }
     return NextResponse.redirect(document.url, { status: 302 })
   }
 

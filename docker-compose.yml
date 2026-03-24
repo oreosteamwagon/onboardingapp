@@ -2,7 +2,10 @@ services:
   app:
     build: .
     ports:
-      - "3000:3000"
+      # Bind to localhost only — external HTTPS traffic must come through a
+      # TLS-terminating reverse proxy (Nginx, Caddy, Traefik) on the same host.
+      # "3000:3000" would expose the app on all interfaces without TLS.
+      - "127.0.0.1:3000:3000"
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379

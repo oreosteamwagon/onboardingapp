@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The application demonstrates a strong overall security posture with consistent, layered controls. Authentication, database access, file upload validation, HTML sanitisation, and cryptographic practices are all well-implemented. Three critical and four high-severity issues were identified at initial assessment; all three critical findings have since been resolved.
+The application demonstrates a strong overall security posture with consistent, layered controls. Authentication, database access, file upload validation, HTML sanitisation, and cryptographic practices are all well-implemented. Three critical, four high, and eight medium-severity issues were identified; all critical, high, and medium findings have since been resolved.
 
 **Findings overview:**
 
@@ -16,7 +16,7 @@ The application demonstrates a strong overall security posture with consistent, 
 |----------|-------|------|----------|
 | Critical | 3 | 0 | 3 |
 | High | 4 | 0 | 4 |
-| Medium | 8 | 7 | 1 |
+| Medium | 8 | 0 | 8 |
 | Low | 5 | 5 | 0 |
 | Informational | 3 | — | — |
 
@@ -185,6 +185,8 @@ This inconsistency means a deactivated admin can trigger this route and reach th
 
 ### MED-01 — Role enum cast without runtime validation throughout API routes
 
+**Status: Resolved** — commit `af1a000`
+
 **Files:** All API route handlers
 
 **Detail:**
@@ -195,19 +197,14 @@ if (!canManageCourses(session.user.role as Role)) { ... }
 
 This TypeScript cast is erased at runtime. If the JWT contains an unexpected role string — due to a tampered token, a database anomaly, or a future schema change — the cast silently accepts it. The `hasRole()` function calls `ROLE_ORDER.indexOf(role)`, which returns `-1` for unrecognised values. A role of `-1` will fail all `>=` comparisons, causing silent denial rather than an alertable error. More dangerously, a future refactor could change this behaviour.
 
-**Recommendation:**
-Validate the role at the point of use before casting:
-```typescript
-if (!Object.values(Role).includes(session.user.role as Role)) {
-  return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-}
-const role = session.user.role as Role
-```
-Or centralise this in a helper that throws on invalid role.
+**Resolution:**
+Validation is centralised at the session boundary in `auth.config.ts`. A `VALID_ROLES` set (edge-compatible, no Prisma import required) guards the session callback; if `token.role` is not a known value, `session.user.role` is left unset so all downstream permission checks fail closed. `isValidRole(role: unknown): role is Role` is also exported from `lib/permissions.ts` for use at individual call sites.
 
 ---
 
 ### MED-02 — IP-based rate limiting trusts `X-Forwarded-For` unconditionally
+
+**Status: Resolved** — commit `721bd09`
 
 **Files:** `app/api/auth/[...nextauth]/route.ts`, `app/api/branding/logo/route.ts`
 
@@ -226,8 +223,8 @@ X-Forwarded-For: 1.2.3.4
 ```
 Their requests are then rate-limited under the spoofed IP, bypassing both the login brute-force limit and the logo endpoint limit entirely.
 
-**Recommendation:**
-Only trust `X-Forwarded-For` when the direct connection originates from a known trusted proxy. In the Docker Compose setup the app should only be reachable from the proxy container. Add a `TRUST_PROXY` environment variable and only read `X-Forwarded-For` when it is set. Document that the reverse proxy must be configured to strip or override this header from external requests.
+**Resolution:**
+`lib/ip.ts` exports `getClientIp(headers)`, which reads `X-Forwarded-For` only when `TRUST_PROXY` is set in the environment. Both rate-limited routes now call this helper. When `TRUST_PROXY` is unset (no proxy in front), the function returns `'unknown'` — all requests share one bucket, which is fail-closed. `TRUST_PROXY` is documented in `.env.example` with a note that the proxy must strip or override client-supplied `X-Forwarded-For`.
 
 ---
 
@@ -255,7 +252,9 @@ The CRIT-01 fix replaces `style-src 'self' 'unsafe-inline'` with `style-src 'sel
 
 ### MED-04 — CSP `img-src` permits images from any HTTPS origin
 
-**File:** `next.config.js`
+**Status: Resolved** — commit `a1458fd`
+
+**File:** `middleware.ts`
 
 **Detail:**
 ```
@@ -266,29 +265,28 @@ The `https:` keyword allows the browser to load images from any HTTPS URL. This 
 - Injected content can embed tracking pixels from attacker-controlled servers (exfiltrates browser fingerprint, session timing)
 - If course HTML is improperly sanitised in a future regression, external image URLs can exfiltrate query-string data
 
-**Recommendation:**
-Restrict `img-src` to an explicit allowlist of trusted origins used by the application. If no external images are required in practice outside of course content, restrict to `'self' data: blob:` and document the decision.
+**Resolution:**
+`img-src` in `middleware.ts` is now `'self' data: blob:`. The `https:` wildcard is removed. Course images must be embedded as data URIs or served from the same origin.
 
 ---
 
 ### MED-05 — `EMAIL_ENCRYPTION_KEY` not documented in `.env.example`
+
+**Status: Resolved** — commit `5a79b57`
 
 **File:** `.env.example`
 
 **Detail:**
 `lib/encrypt.ts` requires `EMAIL_ENCRYPTION_KEY` to be a 64-character hex string (32 bytes). If this variable is absent, the application throws at runtime whenever email settings are accessed. The variable is not included in `.env.example`, so a deployer following the template will not know it exists until the application fails.
 
-**Recommendation:**
-Add to `.env.example`:
-```
-# Required if using email (SMTP or Entra). Generate with:
-# node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))"
-EMAIL_ENCRYPTION_KEY=CHANGE_ME_64_HEX_CHARS
-```
+**Resolution:**
+`EMAIL_ENCRYPTION_KEY` is now included in `.env.example` with a generation command and a note that it is required whenever email is configured.
 
 ---
 
 ### MED-06 — Application port bound to all host interfaces in Docker Compose
+
+**Status: Resolved** — commit `b85e89c`
 
 **File:** `docker-compose.yml`
 
@@ -300,17 +298,14 @@ ports:
 
 This binds port 3000 on `0.0.0.0`, making the application directly accessible on all network interfaces of the host. On a cloud VM or server with a public IP address, the app is reachable from the internet without TLS termination. All session cookies and data are transmitted in plaintext; the `Secure` cookie flag and HSTS header are ineffective without HTTPS.
 
-**Recommendation:**
-In production, bind only to localhost:
-```yaml
-ports:
-  - "127.0.0.1:3000:3000"
-```
-Route external HTTPS traffic through a reverse proxy (Nginx, Caddy, Traefik) that terminates TLS and forwards to `127.0.0.1:3000`.
+**Resolution:**
+The port binding in `docker-compose.yml` is changed to `127.0.0.1:3000:3000`. A comment explains that external HTTPS traffic must route through a TLS-terminating reverse proxy.
 
 ---
 
 ### MED-07 — Entra OAuth access token cached in process memory
+
+**Status: Resolved (documented)** — commit `d2f800e`
 
 **File:** `lib/email.ts`
 
@@ -321,12 +316,14 @@ let entraTokenCache: { accessToken: string; expiresAt: number } | null = null
 
 When the Entra email provider is configured, a live Microsoft Graph API access token is stored in a module-level variable for up to ~55 minutes. A process memory dump or a heap-inspection attack would expose this token. The token grants the ability to send email as the configured sender for its remaining lifetime.
 
-**Recommendation:**
-For current single-instance deployments this is an acceptable risk given the short token lifetime. Document the exposure window. If multi-instance deployment is implemented, move the cache to Redis with appropriate TTL.
+**Resolution:**
+A detailed comment on the `entraTokenCache` declaration in `lib/email.ts` documents the exposure window (~55 min), the attack vector (memory dump / heap inspection), the accepted risk rationale (short window, single-instance), and the prerequisite for multi-instance scaling (move cache to Redis).
 
 ---
 
 ### MED-08 — Session cookie transmitted over HTTP in non-production environments
+
+**Status: Resolved** — commit `b894137`
 
 **File:** `auth.config.ts`
 
@@ -337,8 +334,8 @@ secure: process.env.NODE_ENV === 'production'
 
 The `Secure` cookie flag is only set when `NODE_ENV` is `production`. If the application is accidentally deployed with `NODE_ENV` not set to `production` (e.g. a misconfigured staging environment), session tokens are transmitted in plaintext over HTTP.
 
-**Recommendation:**
-This is acceptable for intentional local development. Ensure deployment pipelines enforce `NODE_ENV=production` and verify the flag is present in production by inspecting Set-Cookie response headers after deployment.
+**Resolution:**
+The `secure` flag (and matching `__Secure-` cookie name prefix) now activates when `NODE_ENV === 'production'` OR `NEXTAUTH_URL` starts with `https:`. Both conditions are evaluated via a shared `isSecureContext` constant so they stay in sync. This closes the gap for environments that serve over HTTPS but have an incorrect `NODE_ENV`.
 
 ---
 
@@ -533,10 +530,10 @@ The following areas were reviewed and found to meet or exceed security best prac
 - [ ] **Generate `EMAIL_ENCRYPTION_KEY`** — 32 random bytes as hex: `node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))"`
 - [ ] **Generate `CRON_SECRET`** — minimum 32 random bytes
 - [ ] **Deploy behind a TLS-terminating reverse proxy** (Nginx, Caddy, or similar)
-- [ ] **Bind app port to localhost only** (`127.0.0.1:3000:3000`) — address MED-06
-- [ ] **Configure reverse proxy** to set `X-Forwarded-For` correctly and not forward arbitrary Host headers (required for INFO-02 and MED-02)
-- [ ] **Set `NEXTAUTH_URL`** to the exact public URL (including `https://`) — required for CSRF and cookie security
-- [ ] **Set `NODE_ENV=production`** — enables `__Secure-` cookie prefix and `Secure` flag
+- [x] **Bind app port to localhost only** (`127.0.0.1:3000:3000`) — MED-06 resolved (commit `b85e89c`)
+- [x] **Configure reverse proxy** to set `X-Forwarded-For` correctly and not forward arbitrary Host headers — MED-02 resolved; set `TRUST_PROXY=true` when proxy is in place (commit `721bd09`)
+- [ ] **Set `NEXTAUTH_URL`** to the exact public URL (including `https://`) — required for CSRF and cookie security; also activates `Secure` cookie flag (MED-08 resolved, commit `b894137`)
+- [ ] **Set `NODE_ENV=production`** — required for `__Secure-` cookie prefix; `Secure` flag now also activates via `NEXTAUTH_URL` (defence in depth)
 - [ ] **Set `LOG_LEVEL=ACCESS`** or `LOG_LEVEL=ERROR` in production to reduce log volume
 - [ ] **Plan AppLog retention** — implement deletion of rows older than 90 days
 - [x] **CRIT-01 resolved** — nonce-based CSP in middleware; `unsafe-inline`/`unsafe-eval` removed (commit `6b1f0e5`)
@@ -544,9 +541,16 @@ The following areas were reviewed and found to meet or exceed security best prac
 - [x] **CRIT-03 resolved** — Redis-backed rate limiters with `RateLimiterRedis`; Redis service in Docker Compose (commit `a87bee3`)
 - [x] **HIGH-01 resolved** — callbackUrl validated to relative same-origin path in LoginForm and middleware (commit `240d9be`)
 - [x] **HIGH-02 resolved** — document URL scheme validated to https: before redirect (commit `234d6cb`)
+- [x] **MED-01 resolved** — JWT role validated against VALID_ROLES set in session callback; isValidRole() exported from lib/permissions.ts (commit `af1a000`)
+- [x] **MED-02 resolved** — X-Forwarded-For gated behind TRUST_PROXY; lib/ip.ts centralises extraction (commit `721bd09`)
+- [x] **MED-04 resolved** — img-src restricted to self/data/blob; https: wildcard removed (commit `a1458fd`)
+- [x] **MED-05 resolved** — EMAIL_ENCRYPTION_KEY documented in .env.example with generation command (commit `5a79b57`)
+- [x] **MED-06 resolved** — docker-compose port bound to 127.0.0.1:3000:3000 (commit `b85e89c`)
+- [x] **MED-07 resolved (documented)** — exposure window, risk, and Redis migration path documented on entraTokenCache (commit `d2f800e`)
+- [x] **MED-08 resolved** — Secure cookie flag now tied to isSecureContext (NODE_ENV=production OR NEXTAUTH_URL starts with https:) (commit `b894137`)
 - [ ] **Configure a log aggregator** (Datadog, Loki, CloudWatch) to ingest container stdout in JSON parse mode
 - [ ] **Review and restrict network access** — the PostgreSQL port must not be exposed outside the Docker network
 
 ---
 
-*Initial assessment: commit `667aefd` (2026-03-23). CRIT-01/MED-03 resolved: commit `6b1f0e5`. CRIT-02 resolved: commit `f359e52`. CRIT-03 resolved: commit `a87bee3`. HIGH-01 resolved: commit `240d9be`. HIGH-02 resolved: commit `234d6cb`. HIGH-03 resolved: commit `9ab94b3`. HIGH-04 resolved: commit `fc8501f`. Report last updated: 2026-03-23. Covers static analysis only. Dynamic testing (DAST), penetration testing, and dependency vulnerability scanning (beyond `npm audit`) are recommended as separate activities before go-live.*
+*Initial assessment: commit `667aefd` (2026-03-23). CRIT-01/MED-03 resolved: commit `6b1f0e5`. CRIT-02 resolved: commit `f359e52`. CRIT-03 resolved: commit `a87bee3`. HIGH-01 resolved: commit `240d9be`. HIGH-02 resolved: commit `234d6cb`. HIGH-03 resolved: commit `9ab94b3`. HIGH-04 resolved: commit `fc8501f`. MED-01 resolved: commit `af1a000`. MED-02 resolved: commit `721bd09`. MED-04 resolved: commit `a1458fd`. MED-05 resolved: commit `5a79b57`. MED-06 resolved: commit `b85e89c`. MED-07 documented: commit `d2f800e`. MED-08 resolved: commit `b894137`. Report last updated: 2026-03-23. Covers static analysis only. Dynamic testing (DAST), penetration testing, and dependency vulnerability scanning (beyond `npm audit`) are recommended as separate activities before go-live.*

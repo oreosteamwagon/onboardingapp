@@ -207,7 +207,7 @@ function dispatchEmail(to: string, subject: string, html: string): void {
     logError({
       message: 'Email send failed',
       action: 'email_send',
-      meta: { error: String(err), to },
+      meta: { error: String(err) },
     })
   })
 }

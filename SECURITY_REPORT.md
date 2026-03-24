@@ -17,7 +17,7 @@ The application demonstrates a strong overall security posture with consistent, 
 | Critical | 3 | 0 | 3 |
 | High | 4 | 0 | 4 |
 | Medium | 8 | 0 | 8 |
-| Low | 5 | 5 | 0 |
+| Low | 5 | 0 | 5 |
 | Informational | 3 | — | — |
 
 ---
@@ -341,31 +341,37 @@ The `secure` flag (and matching `__Secure-` cookie name prefix) now activates wh
 
 ### LOW-01 — No CSP violation reporting configured
 
-**File:** `next.config.js`
+**Status: Resolved** — commit `54ae4b7`
+
+**File:** `middleware.ts`
 
 **Detail:**
 The Content Security Policy does not include a `report-uri` or `report-to` directive. CSP violations — whether caused by a misconfiguration or an active attack — are silently discarded by the browser. There is no visibility into what is being blocked or attempted.
 
-**Recommendation:**
-Add a `report-uri` directive pointing to a logging endpoint. A minimal implementation can log the browser-generated violation report to `AppLog`.
+**Resolution:**
+`report-uri /api/csp-report` is appended to the CSP built in `middleware.ts`. The new unauthenticated POST endpoint `app/api/csp-report/route.ts` rate-limits by IP (30 req/min via `checkCspReportRateLimit`, using the TRUST_PROXY-aware `getClientIp` helper), parses the browser-submitted `csp-report` JSON object, extracts and truncates safe scalar fields only (`blocked-uri` ≤500 chars, `violated-directive` ≤200 chars, `document-uri` ≤500 chars), and writes a structured `AppLog` entry with `action: 'csp_violation'`. The endpoint is added to `PUBLIC_PATHS` in `middleware.ts` so browsers can POST without authentication.
 
 ---
 
 ### LOW-02 — Task completion (PATCH `/api/tasks`) has no rate limit
+
+**Status: Resolved** — commit `2e65974`
 
 **File:** `app/api/tasks/route.ts`
 
 **Detail:**
 The PATCH handler that marks tasks complete does not call any rate limiter. Every other user-facing write operation in the application is rate-limited. While task completion is not resource-intensive, the inconsistency means this endpoint has no abuse throttle.
 
-**Recommendation:**
-Add a per-user rate limit (e.g. 60 completions per minute) consistent with other user-facing operations.
+**Resolution:**
+`taskCompletionLimiter` (60 req/min per user, `keyPrefix: 'rl:task-completion'`) is added to `lib/ratelimit.ts`. `checkTaskCompletionRateLimit` is called at the top of the PATCH handler immediately after `verifyActiveSession`, consistent with all other write endpoints.
 
 ---
 
 ### LOW-03 — Recipient email address included in error log metadata
 
-**File:** `lib/email.ts:200`
+**Status: Resolved** — commit `eb308b6`
+
+**File:** `lib/email.ts`
 
 **Detail:**
 ```typescript
@@ -378,32 +384,36 @@ logError({
 
 When email delivery fails, the recipient address is written to the `AppLog` table and to stdout. Depending on the organisation's privacy policy, logging personally identifiable information (email addresses) in error logs may require explicit documentation or additional controls (e.g. log access restrictions, retention limits).
 
-**Recommendation:**
-Omit the `to` field from the error log, or replace it with a hash for correlation without storing the plaintext address.
+**Resolution:**
+The `to` field is removed from the `meta` object in the `dispatchEmail` catch handler. The error string and `action: 'email_send'` provide sufficient context for diagnosis without retaining the address.
 
 ---
 
 ### LOW-04 — Inconsistent CUID validation on some route ID parameters
 
-**Files:** `app/api/tasks/[taskId]/route.ts` (GET, DELETE)
+**Status: Resolved** — commit `edf9bdf`
+
+**Files:** `app/api/tasks/[taskId]/route.ts` (GET, PUT, DELETE)
 
 **Detail:**
 Some routes validate path parameter IDs with the `validateCuid()` helper (which enforces the regex `/^c[a-z0-9]{24}$/`). Others check only that the string is non-empty. Prisma will fail gracefully on an invalid ID, but the inconsistency means some routes return Prisma-generated error messages rather than structured validation errors, and the defence-in-depth layer is absent.
 
-**Recommendation:**
-Apply `validateCuid()` to all route path parameters that accept database IDs, consistent with the majority of routes.
+**Resolution:**
+The non-empty string checks in the GET, PUT, and DELETE handlers of `app/api/tasks/[taskId]/route.ts` are replaced with `validateCuid(taskId, 'taskId')`, consistent with how body-supplied IDs (`resourceDocumentId`, `courseId`) are already validated in the same file.
 
 ---
 
 ### LOW-05 — No pagination on bulk read endpoints accessible to HR+
+
+**Status: Resolved** — commit `TBD`
 
 **Files:** `app/api/courses/route.ts` (GET), `app/api/workflows/route.ts` (GET), `app/api/tasks/route.ts` (GET)
 
 **Detail:**
 These endpoints return all records without pagination. At scale (thousands of tasks, courses, or workflows) the responses will be large and unbounded, causing increased memory usage, slower response times, and potential denial of service for the server or client.
 
-**Recommendation:**
-Add `page` and `limit` query parameters with bounded defaults (e.g. `limit` capped at 100) consistent with the pattern used in `GET /api/admin/logs`.
+**Resolution:**
+`page` and `limit` query parameters are added to all three GET handlers, using `validatePageParam` and `validateLimitParam` (already in `lib/validation.ts`) with `MAX_LIMIT = 100`. Each response now returns `{ items, total, page, totalPages }` matching the pattern from `GET /api/admin/logs`. The admin UI components receive initial data via server-side Prisma queries in page components, so no UI changes are required.
 
 ---
 
@@ -553,4 +563,4 @@ The following areas were reviewed and found to meet or exceed security best prac
 
 ---
 
-*Initial assessment: commit `667aefd` (2026-03-23). CRIT-01/MED-03 resolved: commit `6b1f0e5`. CRIT-02 resolved: commit `f359e52`. CRIT-03 resolved: commit `a87bee3`. HIGH-01 resolved: commit `240d9be`. HIGH-02 resolved: commit `234d6cb`. HIGH-03 resolved: commit `9ab94b3`. HIGH-04 resolved: commit `fc8501f`. MED-01 resolved: commit `af1a000`. MED-02 resolved: commit `721bd09`. MED-04 resolved: commit `a1458fd`. MED-05 resolved: commit `5a79b57`. MED-06 resolved: commit `b85e89c`. MED-07 documented: commit `d2f800e`. MED-08 resolved: commit `b894137`. Report last updated: 2026-03-23. Covers static analysis only. Dynamic testing (DAST), penetration testing, and dependency vulnerability scanning (beyond `npm audit`) are recommended as separate activities before go-live.*
+*Initial assessment: commit `667aefd` (2026-03-23). CRIT-01/MED-03 resolved: commit `6b1f0e5`. CRIT-02 resolved: commit `f359e52`. CRIT-03 resolved: commit `a87bee3`. HIGH-01 resolved: commit `240d9be`. HIGH-02 resolved: commit `234d6cb`. HIGH-03 resolved: commit `9ab94b3`. HIGH-04 resolved: commit `fc8501f`. MED-01 resolved: commit `af1a000`. MED-02 resolved: commit `721bd09`. MED-04 resolved: commit `a1458fd`. MED-05 resolved: commit `5a79b57`. MED-06 resolved: commit `b85e89c`. MED-07 documented: commit `d2f800e`. MED-08 resolved: commit `b894137`. LOW-01 resolved: commit `54ae4b7`. LOW-02 resolved: commit `2e65974`. LOW-03 resolved: commit `eb308b6`. LOW-04 resolved: commit `edf9bdf`. LOW-05 resolved: see separate commit. Report last updated: 2026-03-23. Covers static analysis only. Dynamic testing (DAST), penetration testing, and dependency vulnerability scanning (beyond `npm audit`) are recommended as separate activities before go-live.*

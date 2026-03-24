@@ -9,14 +9,18 @@ import {
   validateTaskType,
   validateOrder,
   validateCuid,
+  validatePageParam,
+  validateLimitParam,
 } from '@/lib/validation'
 import { log } from '@/lib/logger'
 import { verifyActiveSession } from '@/lib/session'
 import type { Role, TaskType } from '@prisma/client'
 import { notifyApprovalNeeded } from '@/lib/email'
 
+const MAX_LIMIT = 100
+
 // GET /api/tasks — list all onboarding task definitions (HR+ only)
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -30,15 +34,31 @@ export async function GET() {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const tasks = await prisma.onboardingTask.findMany({
-    orderBy: { order: 'asc' },
-    include: {
-      resourceDocument: { select: { id: true, filename: true } },
-      course: { select: { id: true, title: true } },
-    },
-  })
+  const { searchParams } = req.nextUrl
+  const pageResult = validatePageParam(searchParams.get('page') ?? undefined)
+  if ('error' in pageResult) return NextResponse.json({ error: pageResult.error }, { status: 400 })
+  const limitResult = validateLimitParam(searchParams.get('limit') ?? undefined, MAX_LIMIT)
+  if ('error' in limitResult) return NextResponse.json({ error: limitResult.error }, { status: 400 })
 
-  return NextResponse.json(tasks)
+  const page = pageResult.value
+  const limit = limitResult.value
+
+  const include = {
+    resourceDocument: { select: { id: true, filename: true } },
+    course: { select: { id: true, title: true } },
+  }
+
+  const [tasks, total] = await Promise.all([
+    prisma.onboardingTask.findMany({
+      orderBy: { order: 'asc' },
+      include,
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.onboardingTask.count(),
+  ])
+
+  return NextResponse.json({ tasks, total, page, totalPages: Math.ceil(total / limit) })
 }
 
 // POST /api/tasks — create a task definition (HR+ only)

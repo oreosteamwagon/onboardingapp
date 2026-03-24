@@ -4,12 +4,14 @@ import { prisma } from '@/lib/db'
 import { canManageWorkflows } from '@/lib/permissions'
 import { checkWorkflowMgmtRateLimit } from '@/lib/ratelimit'
 import { verifyActiveSession } from '@/lib/session'
-import { validateWorkflowName, validateDescription } from '@/lib/validation'
+import { validateWorkflowName, validateDescription, validatePageParam, validateLimitParam } from '@/lib/validation'
 import { log } from '@/lib/logger'
 import type { Role } from '@prisma/client'
 
+const MAX_LIMIT = 100
+
 // GET /api/workflows — list all workflows with task count (HR+ only)
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -23,14 +25,28 @@ export async function GET() {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const workflows = await prisma.workflow.findMany({
-    orderBy: { name: 'asc' },
-    include: {
-      _count: { select: { tasks: true, userWorkflows: true } },
-    },
-  })
+  const { searchParams } = req.nextUrl
+  const pageResult = validatePageParam(searchParams.get('page') ?? undefined)
+  if ('error' in pageResult) return NextResponse.json({ error: pageResult.error }, { status: 400 })
+  const limitResult = validateLimitParam(searchParams.get('limit') ?? undefined, MAX_LIMIT)
+  if ('error' in limitResult) return NextResponse.json({ error: limitResult.error }, { status: 400 })
 
-  return NextResponse.json(workflows)
+  const page = pageResult.value
+  const limit = limitResult.value
+
+  const [workflows, total] = await Promise.all([
+    prisma.workflow.findMany({
+      orderBy: { name: 'asc' },
+      include: {
+        _count: { select: { tasks: true, userWorkflows: true } },
+      },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.workflow.count(),
+  ])
+
+  return NextResponse.json({ workflows, total, page, totalPages: Math.ceil(total / limit) })
 }
 
 // POST /api/workflows — create a workflow (HR+ only)

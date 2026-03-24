@@ -10,12 +10,16 @@ import {
   validateDescription,
   validatePassingScore,
   validateCourseQuestions,
+  validatePageParam,
+  validateLimitParam,
 } from '@/lib/validation'
 import { log } from '@/lib/logger'
 import type { Role } from '@prisma/client'
 
+const MAX_LIMIT = 100
+
 // GET /api/courses -- list all courses (HR+ only)
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -33,19 +37,35 @@ export async function GET() {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
 
-  const courses = await prisma.course.findMany({
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      title: true,
-      description: true,
-      passingScore: true,
-      createdAt: true,
-      _count: { select: { questions: true, linkedTasks: true, attempts: true } },
-    },
-  })
+  const { searchParams } = req.nextUrl
+  const pageResult = validatePageParam(searchParams.get('page') ?? undefined)
+  if ('error' in pageResult) return NextResponse.json({ error: pageResult.error }, { status: 400 })
+  const limitResult = validateLimitParam(searchParams.get('limit') ?? undefined, MAX_LIMIT)
+  if ('error' in limitResult) return NextResponse.json({ error: limitResult.error }, { status: 400 })
 
-  return NextResponse.json(courses)
+  const page = pageResult.value
+  const limit = limitResult.value
+
+  const select = {
+    id: true,
+    title: true,
+    description: true,
+    passingScore: true,
+    createdAt: true,
+    _count: { select: { questions: true, linkedTasks: true, attempts: true } },
+  }
+
+  const [courses, total] = await Promise.all([
+    prisma.course.findMany({
+      orderBy: { createdAt: 'desc' },
+      select,
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.course.count(),
+  ])
+
+  return NextResponse.json({ courses, total, page, totalPages: Math.ceil(total / limit) })
 }
 
 // POST /api/courses -- create a course (HR+ only)

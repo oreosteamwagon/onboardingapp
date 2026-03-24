@@ -39,7 +39,17 @@ interface UserRef {
 // ---------------------------------------------------------------------------
 // Entra ID token cache (module-level, server-side only)
 // ---------------------------------------------------------------------------
-
+//
+// Security note (MED-07): this live Microsoft Graph access token is held in
+// process memory for up to ~55 minutes (token lifetime minus the 60-second
+// refresh buffer in getEntraAccessToken). A process memory dump or heap
+// inspection attack could expose the token, which grants the ability to send
+// email as the configured sender for its remaining lifetime.
+//
+// This is accepted risk for the current single-instance deployment given the
+// short window and the difficulty of heap inspection in practice. Before
+// moving to a multi-instance deployment, move this cache to Redis with an
+// appropriate TTL so the token is not replicated across processes.
 let entraTokenCache: { accessToken: string; expiresAt: number } | null = null
 
 export function invalidateEntraTokenCache(): void {

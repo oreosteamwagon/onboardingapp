@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { checkLogoRateLimit } from '@/lib/ratelimit'
+import { getClientIp } from '@/lib/ip'
 import { logError } from '@/lib/logger'
 import { readFile } from 'fs/promises'
 import { join, extname } from 'path'
@@ -18,13 +19,9 @@ const EXT_TO_MIME: Record<string, string> = {
 // before any session exists). Returns the organisation logo as a binary image.
 // Rate-limited by IP to prevent resource exhaustion.
 export async function GET(req: NextRequest) {
-  // Take the first IP from x-forwarded-for; fall back to x-real-ip.
-  // Using 'unknown' as final fallback groups all header-less requests together
-  // so rate limiting still applies (fail-closed).
-  const forwarded = req.headers.get('x-forwarded-for')
-  const ip = (forwarded ? forwarded.split(',')[0].trim() : null)
-    ?? req.headers.get('x-real-ip')
-    ?? 'unknown'
+  // getClientIp only reads X-Forwarded-For when TRUST_PROXY is set, preventing
+  // IP spoofing when the app is accessed directly without a reverse proxy.
+  const ip = getClientIp(req.headers)
 
   try {
     await checkLogoRateLimit(ip)

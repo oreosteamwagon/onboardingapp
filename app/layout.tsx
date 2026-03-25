@@ -2,7 +2,6 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { BrandingProvider } from '@/components/BrandingProvider'
 import { prisma } from '@/lib/db'
-import { headers } from 'next/headers'
 
 export const metadata: Metadata = {
   title: 'Onboarding App',
@@ -24,18 +23,19 @@ export default async function RootLayout({
   children: React.ReactNode
 }) {
   const branding = await getBranding()
-  const nonce = headers().get('x-nonce') ?? ''
+
+  // CSS custom properties are applied as an inline style on <html> so they
+  // survive router.refresh() without a nonce. A <style nonce="..."> element
+  // would be re-inserted with a new per-request nonce on each refresh, which
+  // the browser blocks because the page's CSP nonce is fixed at initial load.
+  const cssVars = {
+    '--color-primary': sanitizeColor(branding?.primaryColor ?? '#2563eb'),
+    '--color-accent': sanitizeColor(branding?.accentColor ?? '#7c3aed'),
+  } as React.CSSProperties
 
   return (
-    <html lang="en">
-      <head>
-        <style
-          nonce={nonce}
-          dangerouslySetInnerHTML={{
-            __html: `:root { --color-primary: ${sanitizeColor(branding?.primaryColor ?? '#2563eb')}; --color-accent: ${sanitizeColor(branding?.accentColor ?? '#7c3aed')}; }`,
-          }}
-        />
-      </head>
+    <html lang="en" style={cssVars}>
+      <head />
       <body>
         <BrandingProvider
           orgName={branding?.orgName ?? 'My Organization'}

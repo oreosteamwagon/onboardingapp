@@ -11,7 +11,10 @@ function buildCsp(nonce: string): string {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    `style-src-elem 'self' 'nonce-${nonce}'`,
+    // Inline style attributes (style="...") carry CSS only, not scripts.
+    // Dynamic values like progress bar widths require unsafe-inline here.
+    "style-src-attr 'unsafe-inline'",
     // Restrict to self, data URIs, and blobs only. External HTTPS images are
     // excluded to prevent tracking pixels and data exfiltration via injected
     // content. Course images should be embedded as data URIs or self-hosted.

@@ -49,7 +49,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             '$argon2id$v=19$m=65536,t=3,p=4$dummy$dummy',
             password,
           ).catch(() => false)
-          logAccess({ message: 'login failed: user not found or inactive', action: 'login_failure', path: '/api/auth/callback/credentials' })
+          logAccess({ message: 'login failed', action: 'login_failure', path: '/api/auth/callback/credentials' })
           return null
         }
 
@@ -61,7 +61,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         if (!valid) {
-          logAccess({ message: 'login failed: invalid password', action: 'login_failure', path: '/api/auth/callback/credentials' })
+          logAccess({ message: 'login failed', action: 'login_failure', path: '/api/auth/callback/credentials' })
           return null
         }
 

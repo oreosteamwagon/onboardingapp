@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { unlink } from 'fs/promises'
+import { join } from 'path'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageBranding } from '@/lib/permissions'
 import { saveUpload, UploadError } from '@/lib/upload'
 import { logError } from '@/lib/logger'
 import { verifyActiveSession } from '@/lib/session'
+import { validateHexColor } from '@/lib/validation'
 import type { Role } from '@prisma/client'
 
-const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/
+const UPLOAD_DIR = process.env.UPLOAD_DIR ?? '/app/uploads'
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -39,12 +42,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'orgName is required (max 128 chars)' }, { status: 400 })
   }
 
-  if (typeof primaryColor !== 'string' || !HEX_COLOR_RE.test(primaryColor)) {
-    return NextResponse.json({ error: 'primaryColor must be a valid hex color' }, { status: 400 })
+  const primaryColorErr = validateHexColor(primaryColor, 'primaryColor')
+  if (primaryColorErr) {
+    return NextResponse.json({ error: primaryColorErr }, { status: 400 })
   }
 
-  if (typeof accentColor !== 'string' || !HEX_COLOR_RE.test(accentColor)) {
-    return NextResponse.json({ error: 'accentColor must be a valid hex color' }, { status: 400 })
+  const accentColorErr = validateHexColor(accentColor, 'accentColor')
+  if (accentColorErr) {
+    return NextResponse.json({ error: accentColorErr }, { status: 400 })
   }
 
   let logoPath: string | undefined
@@ -80,6 +85,14 @@ export async function POST(req: NextRequest) {
     accentColor,
   }
 
+  // Read the existing logoPath before the upsert so we can delete it afterward
+  // if it is being replaced. Do this only when a new logo is being uploaded.
+  let oldLogoPath: string | null = null
+  if (logoPath) {
+    const existing = await prisma.brandingSetting.findFirst({ select: { logoPath: true } })
+    oldLogoPath = existing?.logoPath ?? null
+  }
+
   if (logoPath) {
     data.logoPath = logoPath
   }
@@ -89,6 +102,22 @@ export async function POST(req: NextRequest) {
     update: data,
     create: { id: 'default', ...data },
   })
+
+  // Delete the superseded logo file after a successful upsert.
+  // Skip if the path looks suspicious (defense-in-depth; same guard as logo serve route).
+  if (oldLogoPath && oldLogoPath !== logoPath) {
+    if (
+      !oldLogoPath.includes('/') &&
+      !oldLogoPath.includes('\\') &&
+      !oldLogoPath.includes('..')
+    ) {
+      await unlink(join(UPLOAD_DIR, oldLogoPath)).catch((err: NodeJS.ErrnoException) => {
+        if (err.code !== 'ENOENT') {
+          logError({ message: 'Failed to delete superseded logo file', action: 'branding_update', userId: session.user.id, meta: { error: String(err) } })
+        }
+      })
+    }
+  }
 
   return NextResponse.json(branding)
 }

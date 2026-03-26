@@ -360,6 +360,7 @@ Monitor the next-auth/Auth.js repository and changelog for the stable v5 release
 
 ### INFO-01 — AppLog Has No Retention Policy
 
+**Status: Resolved**
 **File:** `prisma/schema.prisma`
 **Severity:** Informational
 
@@ -373,6 +374,7 @@ At production log volume (access logs, error events, CSP violations), the table 
 
 ### INFO-02 — Hex Color Validation Is Inconsistent Across the Codebase
 
+**Status: Resolved**
 **Files:** `app/api/branding/route.ts:10`, `lib/validation.ts:178`, `app/layout.tsx:54`
 **Severity:** Informational
 
@@ -392,6 +394,7 @@ A 3-digit shorthand (`#fff`) or 8-digit RGBA value (`#2563ebff`) accepted by the
 
 ### INFO-03 — Orphaned Logo Files Accumulate When Branding Is Updated
 
+**Status: Resolved**
 **File:** `app/api/branding/route.ts`
 **Severity:** Informational
 
@@ -427,6 +430,7 @@ Adding OIDC will require changing the session cookie to `sameSite: 'lax'`. This 
 
 ### INFO-06 — Login Failure Logs Distinguish User-Not-Found From Wrong Password
 
+**Status: Resolved**
 **File:** `lib/auth.ts:52, 64`
 **Severity:** Informational
 
@@ -546,7 +550,7 @@ The following areas were reviewed and found to meet or exceed security best prac
 - [ ] **Set `NODE_ENV=production`** — required for the `__Secure-` cookie name prefix
 - [ ] **Set `LOG_LEVEL=ACCESS`** (or `ERROR`) in production to reduce log volume
 - [x] **Configure Redis authentication** — set `REDIS_PASSWORD` in `.env`; `docker-compose.yml` passes it to Redis via `--requirepass` and constructs `REDIS_URL` automatically (see LOW-01)
-- [ ] **Plan AppLog retention** — implement deletion of rows older than 90 days (see INFO-01)
+- [x] **Plan AppLog retention** — `POST /api/cron/log-cleanup` deletes rows older than `LOG_RETENTION_DAYS` (default 90); schedule it alongside the overdue-tasks cron (see INFO-01)
 - [ ] **Configure a log aggregator** (Datadog, Loki, CloudWatch) to consume container stdout in JSON parse mode
 - [ ] **Confirm PostgreSQL port is not exposed** outside the Docker network
 - [ ] **Set `ADMIN_BOOTSTRAP_PASSWORD`** or record the generated password printed on first boot

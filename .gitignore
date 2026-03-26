@@ -34,3 +34,6 @@ tsconfig.tsbuildinfo
 
 # security reports
 SECURITY_REPORT.md
+
+# claude
+CLAUDE.md

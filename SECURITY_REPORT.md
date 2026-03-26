@@ -16,7 +16,7 @@ The application demonstrates a strong overall security posture. Authentication, 
 |----------|-------|------|----------|
 | Critical | 0 | 0 | 0 |
 | High | 0 | 0 | 0 |
-| Medium | 4 | 4 | 0 |
+| Medium | 4 | 0 | 4 |
 | Low | 5 | 5 | 0 |
 | Informational | 6 | — | — |
 
@@ -28,7 +28,7 @@ The application demonstrates a strong overall security posture. Authentication, 
 
 ### MED-01 — HTML Injection in Outbound Email Templates
 
-**Status: Open**
+**Status: Resolved**
 
 **File:** `lib/email.ts`
 
@@ -77,7 +77,7 @@ Apply this to every interpolated database value in `emailHtml` call sites, not t
 
 ### MED-02 — CRON_SECRET Comparison Is Not Constant-Time
 
-**Status: Open**
+**Status: Resolved**
 
 **File:** `app/api/cron/overdue-tasks/route.ts:25`
 
@@ -118,7 +118,7 @@ Add `checkCspReportRateLimit` (or a dedicated limiter) to throttle unauthenticat
 
 ### MED-03 — Re-Uploading an UPLOAD Task Does Not Reset Approval Status
 
-**Status: Open**
+**Status: Resolved**
 
 **File:** `app/api/tasks/[taskId]/upload/route.ts:125–139`
 
@@ -170,7 +170,7 @@ update: {
 
 ### MED-04 — Login Rate Limiting Is a Denial-of-Service Vector When TRUST_PROXY Is Unset
 
-**Status: Open**
+**Status: Resolved**
 
 **Files:** `lib/ip.ts`, `app/api/auth/[...nextauth]/route.ts`
 
@@ -550,9 +550,9 @@ The following areas were reviewed and found to meet or exceed security best prac
 - [ ] **Configure a log aggregator** (Datadog, Loki, CloudWatch) to consume container stdout in JSON parse mode
 - [ ] **Confirm PostgreSQL port is not exposed** outside the Docker network
 - [ ] **Set `ADMIN_BOOTSTRAP_PASSWORD`** or record the generated password printed on first boot
-- [ ] **Fix MED-01** — HTML-escape task titles, workflow names, and course names before email interpolation before deploying email notifications
-- [ ] **Fix MED-03** — Reset `approvalStatus` to `PENDING` in the UPLOAD task re-upload upsert before going to production in any compliance-sensitive context
-- [ ] **Fix MED-02** — Replace CRON_SECRET string equality with `crypto.timingSafeEqual`
+- [x] **Fix MED-01** — HTML-escape task titles, workflow names, and course names before email interpolation before deploying email notifications
+- [x] **Fix MED-03** — Reset `approvalStatus` to `PENDING` in the UPLOAD task re-upload upsert before going to production in any compliance-sensitive context
+- [x] **Fix MED-02** — Replace CRON_SECRET string equality with `crypto.timingSafeEqual`
 
 ---
 

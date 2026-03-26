@@ -1,6 +1,9 @@
+import { timingSafeEqual } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { processOverdueTasks } from '@/lib/email'
 import { logError, log } from '@/lib/logger'
+import { checkCronRateLimit } from '@/lib/ratelimit'
+import { getClientIp } from '@/lib/ip'
 
 // POST /api/cron/overdue-tasks
 //
@@ -14,6 +17,13 @@ import { logError, log } from '@/lib/logger'
 //   - The endpoint is idempotent: re-running it will not send duplicate emails
 //     because it only processes tasks where overdueNotifiedAt IS NULL.
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req.headers)
+  try {
+    await checkCronRateLimit(ip)
+  } catch {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
   const cronSecret = req.headers.get('x-cron-secret')
 
   if (!process.env.CRON_SECRET) {
@@ -22,7 +32,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Cron not configured' }, { status: 503 })
   }
 
-  if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
+  if (!cronSecret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const expected = Buffer.from(process.env.CRON_SECRET, 'utf8')
+  const received = Buffer.from(cronSecret, 'utf8')
+  if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

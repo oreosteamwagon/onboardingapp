@@ -216,6 +216,17 @@ function dispatchEmail(to: string, subject: string, html: string): void {
 // Template helpers
 // ---------------------------------------------------------------------------
 
+// HTML-escape user-controlled values before interpolating into email HTML.
+// Task titles and workflow names are validated only for length, not content,
+// so they can contain <, >, ", and & which would otherwise inject HTML.
+function esc(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
 function displayName(u: { firstName?: string | null; lastName?: string | null; username: string }): string {
   if (u.firstName && u.lastName) return `${u.firstName} ${u.lastName}`
   if (u.firstName) return u.firstName
@@ -288,8 +299,8 @@ export async function notifyUserCreated(userId: string, tempPassword: string): P
       greeting,
       'Your account has been created. Please log in and change your password as soon as possible.',
       '&nbsp;',
-      `<strong>Username:</strong> ${user.username}`,
-      `<strong>Temporary password:</strong> <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">${tempPassword}</code>`,
+      `<strong>Username:</strong> ${esc(user.username)}`,
+      `<strong>Temporary password:</strong> <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">${esc(tempPassword)}</code>`,
       '&nbsp;',
       'You will be guided through your onboarding tasks after you log in.',
     ]),
@@ -305,8 +316,8 @@ export async function notifyUserCreated(userId: string, tempPassword: string): P
         supGreeting,
         `A new user has been created with you listed as their supervisor.`,
         '&nbsp;',
-        `<strong>Name:</strong> ${displayName(user)}`,
-        `<strong>Username:</strong> ${user.username}`,
+        `<strong>Name:</strong> ${esc(displayName(user))}`,
+        `<strong>Username:</strong> ${esc(user.username)}`,
         '&nbsp;',
         'They will need to complete their onboarding tasks. You may be asked to approve some of their work.',
       ]),
@@ -337,7 +348,7 @@ export async function notifyWorkflowAssigned(userId: string, workflowId: string)
     `New workflow assigned: ${workflow.name}`,
     emailHtml('New Workflow Assigned', [
       greeting,
-      `A new onboarding workflow has been assigned to you: <strong>${workflow.name}</strong>`,
+      `A new onboarding workflow has been assigned to you: <strong>${esc(workflow.name)}</strong>`,
       '&nbsp;',
       'Log in to view your tasks and begin working through them.',
     ]),
@@ -350,9 +361,9 @@ export async function notifyWorkflowAssigned(userId: string, workflowId: string)
       `Workflow assigned to your supervisee`,
       emailHtml('Workflow Assignment', [
         supGreeting,
-        `The workflow <strong>${workflow.name}</strong> has been assigned to a user under your supervision.`,
+        `The workflow <strong>${esc(workflow.name)}</strong> has been assigned to a user under your supervision.`,
         '&nbsp;',
-        `<strong>User:</strong> ${displayName(user)}`,
+        `<strong>User:</strong> ${esc(displayName(user))}`,
         '&nbsp;',
         'You may receive approval requests as they complete tasks in this workflow.',
       ]),
@@ -391,9 +402,9 @@ export async function notifyTaskAddedToWorkflow(workflowId: string, taskId: stri
       `New task added to your workflow: ${taskTitle}`,
       emailHtml('New Task Added', [
         greeting,
-        `A new task has been added to your workflow <strong>${workflowName}</strong>:`,
+        `A new task has been added to your workflow <strong>${esc(workflowName)}</strong>:`,
         '&nbsp;',
-        `<strong>${taskTitle}</strong>`,
+        `<strong>${esc(taskTitle)}</strong>`,
         '&nbsp;',
         'Log in to view and complete this task.',
       ]),
@@ -451,8 +462,8 @@ export async function notifyApprovalNeeded(userId: string, taskId: string): Prom
         supGreeting,
         `A task requires your approval.`,
         '&nbsp;',
-        `<strong>User:</strong> ${userName}`,
-        `<strong>Task:</strong> ${taskTitle}`,
+        `<strong>User:</strong> ${esc(userName)}`,
+        `<strong>Task:</strong> ${esc(taskTitle)}`,
         '&nbsp;',
         'Log in to review and approve or reject this task.',
       ]),
@@ -469,8 +480,8 @@ export async function notifyApprovalNeeded(userId: string, taskId: string): Prom
         greeting,
         `A task is pending approval in the system.`,
         '&nbsp;',
-        `<strong>User:</strong> ${userName}`,
-        `<strong>Task:</strong> ${taskTitle}`,
+        `<strong>User:</strong> ${esc(userName)}`,
+        `<strong>Task:</strong> ${esc(taskTitle)}`,
         '&nbsp;',
         'Log in to the approval queue to review this task.',
       ]),
@@ -535,8 +546,8 @@ export async function checkAndNotifyWorkflowCompletion(userId: string, taskId: s
           greeting,
           `A user has completed all tasks in a workflow.`,
           '&nbsp;',
-          `<strong>User:</strong> ${userName}`,
-          `<strong>Workflow:</strong> ${workflowName}`,
+          `<strong>User:</strong> ${esc(userName)}`,
+          `<strong>Workflow:</strong> ${esc(workflowName)}`,
           '&nbsp;',
           'All tasks have been completed and approved.',
         ]),
@@ -603,7 +614,7 @@ export async function processOverdueTasks(): Promise<OverdueResult> {
         userGreeting,
         `A task assigned to you has not been completed and is now overdue by ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''}.`,
         '&nbsp;',
-        `<strong>Task:</strong> ${taskTitle}`,
+        `<strong>Task:</strong> ${esc(taskTitle)}`,
         '&nbsp;',
         'Please log in and complete this task as soon as possible.',
       ]),
@@ -633,8 +644,8 @@ export async function processOverdueTasks(): Promise<OverdueResult> {
           supGreeting,
           `One of the users under your supervision has not completed a task.`,
           '&nbsp;',
-          `<strong>User:</strong> ${userName}`,
-          `<strong>Task:</strong> ${taskTitle}`,
+          `<strong>User:</strong> ${esc(userName)}`,
+          `<strong>Task:</strong> ${esc(taskTitle)}`,
           `<strong>Overdue by:</strong> ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''}`,
           '&nbsp;',
           'Log in to check their onboarding progress.',
@@ -652,8 +663,8 @@ export async function processOverdueTasks(): Promise<OverdueResult> {
           greeting,
           `A user has not completed an assigned task.`,
           '&nbsp;',
-          `<strong>User:</strong> ${userName}`,
-          `<strong>Task:</strong> ${taskTitle}`,
+          `<strong>User:</strong> ${esc(userName)}`,
+          `<strong>Task:</strong> ${esc(taskTitle)}`,
           `<strong>Overdue by:</strong> ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''}`,
           '&nbsp;',
           'Log in to view the onboarding status of your team.',

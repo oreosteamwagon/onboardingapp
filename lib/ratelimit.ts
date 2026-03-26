@@ -218,6 +218,12 @@ export async function checkCspReportRateLimit(ip: string): Promise<void> {
   await cspReportLimiter.consume(ip)
 }
 
+// 30 cron trigger attempts per minute per IP — unauthenticated endpoint, throttles timing-based attacks on CRON_SECRET
+const cronLimiter = makeLimiter({ keyPrefix: 'rl:cron', points: 30, duration: 60, blockDuration: 60 })
+export async function checkCronRateLimit(ip: string): Promise<void> {
+  await cronLimiter.consume(ip)
+}
+
 // 60 task completion toggles per minute per user — throttle on the PATCH /api/tasks endpoint
 const taskCompletionLimiter = makeLimiter({ keyPrefix: 'rl:task-completion', points: 60, duration: 60, blockDuration: 60 })
 export async function checkTaskCompletionRateLimit(userId: string): Promise<void> {

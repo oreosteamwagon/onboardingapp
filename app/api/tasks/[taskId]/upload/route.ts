@@ -128,6 +128,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
           completed: true,
           completedAt: new Date(),
           documentId: doc.id,
+          approvalStatus: 'PENDING',
+          approvedAt: null,
+          approvedById: null,
         },
         create: {
           userId: session.user.id,

@@ -5,7 +5,7 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat python3 make g++ openssl
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # ---- builder ----
 FROM base AS builder

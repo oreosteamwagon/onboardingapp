@@ -17,7 +17,7 @@ The application demonstrates a strong overall security posture. Authentication, 
 | Critical | 0 | 0 | 0 |
 | High | 0 | 0 | 0 |
 | Medium | 4 | 0 | 4 |
-| Low | 5 | 5 | 0 |
+| Low | 5 | 1 | 4 |
 | Informational | 6 | — | — |
 
 ---
@@ -205,7 +205,7 @@ The `.env.example` already documents `TRUST_PROXY`, but does not explain the DoS
 
 ### LOW-01 — Redis Deployed Without Authentication or TLS
 
-**Status: Open**
+**Status: Resolved**
 
 **File:** `docker-compose.yml`
 
@@ -270,7 +270,7 @@ If `unsafe-inline` for `style-src-attr` must remain, document the residual risk 
 
 ### LOW-03 — File Downloads Load the Entire File Into Process Memory
 
-**Status: Open**
+**Status: Resolved**
 
 **Files:** `app/api/documents/[documentId]/download/route.ts`, `app/api/attachments/[attachmentId]/download/route.ts`, `app/api/branding/logo/route.ts`
 
@@ -297,7 +297,7 @@ As an interim control, consider reducing `MAX_SIZE_BYTES` in `lib/upload.ts` for
 
 ### LOW-04 — CRON_SECRET Not Documented in `.env.example`
 
-**Status: Open**
+**Status: Resolved**
 
 **Files:** `app/api/cron/overdue-tasks/route.ts`, `.env.example`
 
@@ -329,7 +329,7 @@ CRON_SECRET=CHANGE_ME
 
 ### LOW-05 — next-auth@5 Pre-Release Version Used in Production
 
-**Status: Open**
+**Status: Resolved**
 
 **File:** `package.json`
 
@@ -545,7 +545,7 @@ The following areas were reviewed and found to meet or exceed security best prac
 - [ ] **Set `NEXTAUTH_URL`** to the exact public URL including `https://` — required for CSRF and activates the `Secure` cookie flag
 - [ ] **Set `NODE_ENV=production`** — required for the `__Secure-` cookie name prefix
 - [ ] **Set `LOG_LEVEL=ACCESS`** (or `ERROR`) in production to reduce log volume
-- [ ] **Configure Redis authentication** — set `requirepass` and update `REDIS_URL` (see LOW-01)
+- [x] **Configure Redis authentication** — set `REDIS_PASSWORD` in `.env`; `docker-compose.yml` passes it to Redis via `--requirepass` and constructs `REDIS_URL` automatically (see LOW-01)
 - [ ] **Plan AppLog retention** — implement deletion of rows older than 90 days (see INFO-01)
 - [ ] **Configure a log aggregator** (Datadog, Loki, CloudWatch) to consume container stdout in JSON parse mode
 - [ ] **Confirm PostgreSQL port is not exposed** outside the Docker network

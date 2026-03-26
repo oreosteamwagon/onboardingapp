@@ -3,7 +3,9 @@ import { prisma } from '@/lib/db'
 import { checkLogoRateLimit } from '@/lib/ratelimit'
 import { getClientIp } from '@/lib/ip'
 import { logError } from '@/lib/logger'
-import { readFile } from 'fs/promises'
+import { createReadStream } from 'fs'
+import { stat } from 'fs/promises'
+import { Readable } from 'stream'
 import { join, extname } from 'path'
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? '/app/uploads'
@@ -60,18 +62,22 @@ export async function GET(req: NextRequest) {
   }
 
   const filePath = join(UPLOAD_DIR, storagePath)
-  let buffer: Buffer
+
+  let fileSize: number
   try {
-    buffer = await readFile(filePath)
+    const stats = await stat(filePath)
+    fileSize = stats.size
   } catch {
     return NextResponse.json({ error: 'Logo file not found' }, { status: 404 })
   }
 
-  return new NextResponse(new Uint8Array(buffer), {
+  const webStream = Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>
+
+  return new NextResponse(webStream, {
     status: 200,
     headers: {
       'Content-Type': contentType,
-      'Content-Length': String(buffer.length),
+      'Content-Length': String(fileSize),
       // Public branding asset — safe to cache in browser and CDN.
       // Short TTL so logo changes propagate within an hour.
       'Cache-Control': 'public, max-age=3600',

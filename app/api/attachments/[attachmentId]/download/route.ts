@@ -6,7 +6,9 @@ import { checkAttachmentDownloadRateLimit } from '@/lib/ratelimit'
 import { logError } from '@/lib/logger'
 import { validateCuid } from '@/lib/validation'
 import { verifyActiveSession } from '@/lib/session'
-import { readFile } from 'fs/promises'
+import { createReadStream } from 'fs'
+import { stat } from 'fs/promises'
+import { Readable } from 'stream'
 import { join, extname } from 'path'
 import type { Role } from '@prisma/client'
 
@@ -78,9 +80,11 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   }
 
   const filePath = join(UPLOAD_DIR, attachment.storagePath)
-  let buffer: Buffer
+
+  let fileSize: number
   try {
-    buffer = await readFile(filePath)
+    const stats = await stat(filePath)
+    fileSize = stats.size
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException).code
     if (code === 'ENOENT') {
@@ -94,12 +98,14 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   const contentType = EXT_TO_MIME[ext] ?? 'application/octet-stream'
   const encodedFilename = encodeURIComponent(attachment.filename)
 
-  return new NextResponse(new Uint8Array(buffer), {
+  const webStream = Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>
+
+  return new NextResponse(webStream, {
     status: 200,
     headers: {
       'Content-Type': contentType,
       'Content-Disposition': `attachment; filename*=UTF-8''${encodedFilename}`,
-      'Content-Length': String(buffer.length),
+      'Content-Length': String(fileSize),
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
     },

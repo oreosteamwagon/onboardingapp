@@ -81,8 +81,8 @@ export async function POST(req: NextRequest) {
     logoPath?: string
   } = {
     orgName: orgName.trim(),
-    primaryColor,
-    accentColor,
+    primaryColor: primaryColor as string,
+    accentColor: accentColor as string,
   }
 
   // Read the existing logoPath before the upsert so we can delete it afterward

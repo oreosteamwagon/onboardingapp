@@ -31,3 +31,6 @@ tsconfig.tsbuildinfo
 # misc
 .DS_Store
 *.pem
+
+# security reports
+SECURITY_REPORT.md

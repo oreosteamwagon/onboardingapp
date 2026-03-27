@@ -11,6 +11,12 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
     volumes:
       - uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       db:
         condition: service_healthy

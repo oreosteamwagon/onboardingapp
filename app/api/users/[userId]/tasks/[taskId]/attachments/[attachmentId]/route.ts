@@ -37,7 +37,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   try {
     await checkTaskMgmtRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   const userIdError = validateCuid(params.userId, 'userId')

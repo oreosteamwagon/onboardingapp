@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   try {
     await checkCronRateLimit(ip)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   const cronSecret = req.headers.get('x-cron-secret')

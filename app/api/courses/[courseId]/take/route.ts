@@ -26,7 +26,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   try {
     await checkTeamTasksRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   const cuidErr = validateCuid(params.courseId, 'courseId')
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   try {
     await checkCourseAttemptRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   const cuidErr = validateCuid(params.courseId, 'courseId')

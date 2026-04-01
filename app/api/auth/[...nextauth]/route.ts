@@ -40,7 +40,7 @@ async function POST(req: NextRequest) {
     } catch {
       return NextResponse.json(
         { error: 'Too many login attempts. Please try again in 15 minutes.' },
-        { status: 429 },
+        { status: 429, headers: { 'Retry-After': '900' } },
       )
     }
   }

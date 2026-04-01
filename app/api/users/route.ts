@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
   try {
     await checkUserCreateRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   const tempPassword = randomBytes(12).toString('base64url')

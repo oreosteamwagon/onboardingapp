@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   try {
     await checkLogoRateLimit(ip)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   const branding = await prisma.brandingSetting.findFirst({

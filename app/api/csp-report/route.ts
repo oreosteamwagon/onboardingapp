@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   try {
     await checkCspReportRateLimit(ip)
   } catch {
-    return new NextResponse(null, { status: 429 })
+    return new NextResponse(null, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   let body: unknown

@@ -46,7 +46,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   try {
     await checkDocumentDownloadRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   const document = await prisma.document.findUnique({

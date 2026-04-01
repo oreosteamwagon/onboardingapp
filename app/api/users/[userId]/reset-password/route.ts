@@ -34,7 +34,7 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
   try {
     await checkPasswordResetRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   const idError = validateCuid(params.userId, 'userId')

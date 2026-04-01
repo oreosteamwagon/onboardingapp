@@ -28,7 +28,7 @@ export async function DELETE(
   try {
     await checkCategoryMgmtRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   const { id } = params

@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   try {
     await checkCourseMgmtRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   const { searchParams } = req.nextUrl
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
   try {
     await checkCourseMgmtRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   let body: unknown

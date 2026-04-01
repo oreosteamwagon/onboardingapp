@@ -25,6 +25,7 @@ function buildCsp(nonce: string): string {
     "base-uri 'self'",
     "form-action 'self'",
     "report-uri /api/csp-report",
+    "report-to csp-endpoint",
   ].join('; ')
 }
 
@@ -35,6 +36,7 @@ function applySecurityHeaders(response: NextResponse, csp: string): void {
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
   response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
+  response.headers.set('Reporting-Endpoints', 'csp-endpoint="/api/csp-report"')
 }
 
 export default auth(function middleware(req: NextRequest & { auth: unknown }) {

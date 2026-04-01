@@ -75,7 +75,7 @@ export async function PUT(req: NextRequest) {
   try {
     await checkEmailSettingsRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   let body: unknown

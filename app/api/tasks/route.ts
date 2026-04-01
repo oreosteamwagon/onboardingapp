@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
   try {
     await checkTaskMgmtRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   let body: unknown
@@ -175,7 +175,7 @@ export async function PATCH(req: NextRequest) {
   try {
     await checkTaskCompletionRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   let body: unknown

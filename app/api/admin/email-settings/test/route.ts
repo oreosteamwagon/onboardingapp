@@ -18,7 +18,7 @@ export async function POST(_req: NextRequest) {
   try {
     await checkEmailSettingsRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   // Verify email is configured and enabled before attempting send

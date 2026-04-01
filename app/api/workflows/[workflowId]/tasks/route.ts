@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   try {
     await checkWorkflowMgmtRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   const workflow = await prisma.workflow.findUnique({ where: { id: params.workflowId } })
@@ -99,7 +99,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
   try {
     await checkWorkflowMgmtRateLimit(session.user.id)
   } catch {
-    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
   let body: unknown

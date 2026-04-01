@@ -82,6 +82,6 @@ export default auth(function middleware(req: NextRequest & { auth: unknown }) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|uploads/).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }

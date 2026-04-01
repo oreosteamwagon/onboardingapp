@@ -20,8 +20,11 @@ async function main() {
       plainPassword = envPassword
       console.log('Admin password set from ADMIN_BOOTSTRAP_PASSWORD')
     } else {
-      plainPassword = randomBytes(12).toString('base64url')
-      console.log(`Admin password (save this): ${plainPassword}`)
+      console.error(
+        'ADMIN_BOOTSTRAP_PASSWORD is not set. ' +
+        'Set it in the environment to create the initial admin user.',
+      )
+      process.exit(1)
     }
 
     const passwordHash = await argon2.hash(plainPassword, {

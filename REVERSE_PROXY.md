@@ -1,6 +1,6 @@
 # Reverse Proxy Configuration Requirements
 
-This document describes how to configure the reverse proxy that sits in front of the OnboardingApp in a DMZ deployment. All examples use Nginx; adapt to your proxy (Caddy, Traefik, HAProxy) as needed.
+This document describes how to configure the reverse proxy that sits in front of the OnboardingApp in a DMZ deployment. Configurations are provided for Caddy (recommended) and Nginx. Adapt to your proxy of choice (Traefik, HAProxy, etc.) using the header and path requirements below.
 
 The app listens on `127.0.0.1:3000` (HTTP, no TLS). The reverse proxy terminates TLS and forwards requests to the app over the loopback interface.
 
@@ -16,7 +16,90 @@ Before configuring the proxy, ensure:
 
 ---
 
-## Complete Nginx Configuration
+## Caddy Configuration (Recommended)
+
+Caddy automatically obtains and renews TLS certificates via ACME (Let's Encrypt / ZeroSSL). If you use an internal CA or manually managed certificates, see the `tls` directive below.
+
+```caddyfile
+# /etc/caddy/Caddyfile
+
+onboarding.corp.example.com {
+    # -------------------------------------------------------------------
+    # TLS -- Caddy manages certificates automatically by default.
+    # For internal/corporate CAs, specify the cert and key explicitly:
+    # tls /etc/caddy/tls/onboarding.crt /etc/caddy/tls/onboarding.key
+    # -------------------------------------------------------------------
+
+    # -------------------------------------------------------------------
+    # Path restrictions -- block endpoints that must not be externally accessible
+    # -------------------------------------------------------------------
+
+    # Cron endpoints are called by an internal scheduler, not through the proxy
+    respond /api/cron/* 403
+
+    # Factory reset must never be triggered from the internet
+    respond /api/admin/factory-reset 403
+
+    # Files are served through authenticated API routes, not directly
+    respond /uploads/* 404
+
+    # -------------------------------------------------------------------
+    # Health check endpoint (no rate limiting, no access log)
+    # -------------------------------------------------------------------
+    handle /api/health {
+        reverse_proxy 127.0.0.1:3000 {
+            header_up Host {host}
+        }
+        log {
+            output discard
+        }
+    }
+
+    # -------------------------------------------------------------------
+    # Proxy to app
+    # -------------------------------------------------------------------
+    handle {
+        # Optional: defense-in-depth rate limiting alongside the app's own limits
+        # Requires the caddy-ratelimit plugin (not included in standard Caddy)
+        # rate_limit {remote.ip} 30r/s
+
+        reverse_proxy 127.0.0.1:3000 {
+            # --- Headers (security-critical) ---
+
+            # Strip any client-supplied forwarded headers, then set real values.
+            # This prevents clients from spoofing their IP to bypass rate limits.
+            header_up X-Forwarded-For   {remote_host}
+            header_up X-Real-IP         {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host  {host}
+            header_up Host              {host}
+
+            # Request correlation ID for tracing across Palo Alto, proxy, and app logs.
+            # The app reads this in middleware and echoes it on the response.
+            header_up X-Request-ID {http.request.uuid}
+        }
+
+        # Do not pass the X-Powered-By header from the backend
+        header -X-Powered-By
+    }
+
+    # Request body size limit -- slightly above the app's 25 MB upload limit
+    request_body {
+        max_size 30MB
+    }
+}
+```
+
+### Notes on Caddy
+
+- Caddy handles HTTPS redirects automatically -- no separate HTTP server block is needed.
+- `{remote_host}` gives the direct client IP. If Caddy sits behind another proxy (e.g. a load balancer), use the `trusted_proxies` directive and `{client_ip}` placeholder instead.
+- `{http.request.uuid}` generates a unique ID per request (requires Caddy 2.7+). For older versions, use a plugin or let the app generate its own ID (it does this as a fallback).
+- Caddy's default timeouts are reasonable for most deployments. Adjust with `servers` global options if needed.
+
+---
+
+## Nginx Configuration
 
 ```nginx
 # /etc/nginx/conf.d/onboarding.conf
@@ -140,12 +223,12 @@ server {
 
 | Header | Value | Why |
 |--------|-------|-----|
-| `X-Forwarded-For` | `$remote_addr` | The app uses this for per-IP rate limiting when `TRUST_PROXY=true`. Must be set to the real client IP, not appended to a client-supplied value. |
-| `X-Real-IP` | `$remote_addr` | Fallback read by `lib/ip.ts` if `X-Forwarded-For` is missing. |
-| `X-Forwarded-Proto` | `$scheme` | Auth.js uses this to determine if the connection is secure. Required for correct cookie `Secure` flag behavior. |
-| `X-Forwarded-Host` | `$host` | Used by Auth.js for callback URL construction. |
-| `Host` | `$host` | Must match `NEXTAUTH_URL` hostname for CSRF validation. |
-| `X-Request-ID` | `$request_id` | Nginx-generated unique ID. The app preserves it in logs and echoes it on the response for end-to-end request tracing. |
+| `X-Forwarded-For` | Real client IP | The app uses this for per-IP rate limiting when `TRUST_PROXY=true`. Must be set to the real client IP, not appended to a client-supplied value. |
+| `X-Real-IP` | Real client IP | Fallback read by `lib/ip.ts` if `X-Forwarded-For` is missing. |
+| `X-Forwarded-Proto` | Request scheme (`https`) | Auth.js uses this to determine if the connection is secure. Required for correct cookie `Secure` flag behavior. |
+| `X-Forwarded-Host` | Request hostname | Used by Auth.js for callback URL construction. |
+| `Host` | Request hostname | Must match `NEXTAUTH_URL` hostname for CSRF validation. |
+| `X-Request-ID` | Proxy-generated UUID | A unique ID per request (Nginx: `$request_id`; Caddy: `{http.request.uuid}`). The app preserves it in logs and echoes it on the response for end-to-end request tracing. If not provided, the app generates its own. |
 
 ---
 

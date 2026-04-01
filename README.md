@@ -126,7 +126,7 @@ Internet
    |
 [Palo Alto / Firewall]
    |
-[Reverse Proxy (Nginx)]  -- terminates TLS, forwards to 127.0.0.1:3000
+[Reverse Proxy (Caddy, Nginx, etc.)]  -- terminates TLS, forwards to 127.0.0.1:3000
    |
 [OnboardingApp container] -- app on frontend + backend networks
    |
@@ -141,7 +141,7 @@ The `backend` Docker network is marked `internal: true`, so the database and Red
 
 - A Linux host (or VM) with Docker and Docker Compose v2 installed
 - A TLS certificate for the external hostname
-- A reverse proxy (Nginx recommended) -- see [REVERSE_PROXY.md](REVERSE_PROXY.md) for a complete configuration
+- A reverse proxy (Caddy recommended for simplest setup; Nginx, Traefik, and HAProxy also work) -- see [REVERSE_PROXY.md](REVERSE_PROXY.md) for complete configurations
 - Network access from the host to an SMTP server or Microsoft Graph API (if email notifications are needed)
 
 ### Step 1. Clone the repository
@@ -268,7 +268,7 @@ Starting application...
 
 ### Step 5. Configure the reverse proxy
 
-Set up Nginx (or your preferred proxy) to terminate TLS and forward traffic to `127.0.0.1:3000`. A complete, ready-to-use Nginx configuration is provided in **[REVERSE_PROXY.md](REVERSE_PROXY.md)**.
+Set up your reverse proxy to terminate TLS and forward traffic to `127.0.0.1:3000`. Ready-to-use configurations for both Caddy and Nginx are provided in **[REVERSE_PROXY.md](REVERSE_PROXY.md)**.
 
 The proxy must:
 - Terminate TLS with TLSv1.2+ and strong ciphers

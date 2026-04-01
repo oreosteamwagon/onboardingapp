@@ -230,7 +230,7 @@ export function validateLimitParam(v: unknown, maxLimit: number): { value: numbe
 }
 
 // Allowlist of standard SMTP ports
-export const VALID_SMTP_PORTS = [25, 465, 587, 2525] as const
+export const VALID_SMTP_PORTS = [465, 587, 2525] as const
 export type ValidSmtpPort = typeof VALID_SMTP_PORTS[number]
 
 // Hostname: letters, digits, hyphens, dots — max 253 chars per RFC 1035

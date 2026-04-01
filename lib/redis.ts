@@ -7,6 +7,7 @@ if (redisUrl) {
   client = new IORedis(redisUrl, {
     enableReadyCheck: false,
     maxRetriesPerRequest: null,
+    tls: redisUrl.startsWith('rediss://') ? {} : undefined,
   })
   client.on('error', (err: Error) => {
     console.error('[redis] Connection error:', err.message)

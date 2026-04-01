@@ -40,6 +40,8 @@ function applySecurityHeaders(response: NextResponse, csp: string): void {
 export default auth(function middleware(req: NextRequest & { auth: unknown }) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
   const csp = buildCsp(nonce)
+  // Preserve request ID from the reverse proxy, or generate one for correlation
+  const requestId = req.headers.get('x-request-id') || crypto.randomUUID()
   const { pathname } = req.nextUrl
   const session = (req as { auth?: { user?: { role?: string; active?: boolean } } }).auth
 
@@ -55,13 +57,24 @@ export default auth(function middleware(req: NextRequest & { auth: unknown }) {
   } else if (!PUBLIC_PATHS.some((p) => pathname.startsWith(p)) && pathname === '/') {
     response = NextResponse.redirect(new URL('/dashboard', req.url))
   } else {
-    // Forward nonce to server components via request header
+    // Forward nonce and request ID to server components via request headers
     const requestHeaders = new Headers(req.headers)
     requestHeaders.set('x-nonce', nonce)
+    requestHeaders.set('x-request-id', requestId)
     response = NextResponse.next({ request: { headers: requestHeaders } })
   }
 
   applySecurityHeaders(response, csp)
+
+  // Echo request ID for correlation across reverse proxy, Palo Alto, and app logs
+  response.headers.set('X-Request-ID', requestId)
+
+  // Prevent caching of authenticated API responses by reverse proxies and browsers.
+  // The logo endpoint is excluded because it sets its own Cache-Control (public asset).
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/branding/logo')) {
+    response.headers.set('Cache-Control', 'no-store')
+  }
+
   return response
 })
 

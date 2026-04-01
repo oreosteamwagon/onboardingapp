@@ -11,6 +11,9 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
     volumes:
       - uploads:/app/uploads
+    networks:
+      - frontend
+      - backend
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
       interval: 15s
@@ -29,6 +32,8 @@ services:
     env_file: .env
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -41,12 +46,21 @@ services:
     command: redis-server --requirepass ${REDIS_PASSWORD}
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+    networks:
+      - backend
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "redis-cli --no-auth-warning -a $$REDIS_PASSWORD ping"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true  # No external connectivity — db and redis are unreachable from outside
 
 volumes:
   uploads:

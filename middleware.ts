@@ -68,7 +68,7 @@ export default auth(function middleware(req: NextRequest & { auth: unknown }) {
 
   applySecurityHeaders(response, csp)
 
-  // Echo request ID for correlation across reverse proxy, Palo Alto, and app logs
+  // Echo request ID for correlation across firewall, reverse proxy, and app logs
   response.headers.set('X-Request-ID', requestId)
 
   // Prevent caching of authenticated API responses by reverse proxies and browsers.

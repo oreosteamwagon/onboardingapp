@@ -2,7 +2,7 @@
 
 This document describes how to configure the reverse proxy that sits in front of the OnboardingApp. Configurations are provided for Caddy (recommended) and Nginx. Adapt to your proxy of choice (Traefik, HAProxy, etc.) using the header and path requirements below.
 
-The reverse proxy container runs on the DMZ and terminates TLS. The app container runs on the App VLAN (internal network) and listens on port 3000 (HTTP, no TLS). The proxy forwards requests to the app's routable IP across the VLAN boundary. Inter-VLAN routing is handled by the Palo Alto firewall, which restricts inbound traffic so that only the DMZ proxy can reach the app on TCP/3000.
+The reverse proxy container runs on the DMZ and terminates TLS. The app container runs on the App VLAN (internal network) and listens on port 3000 (HTTP, no TLS). The proxy forwards requests to the app's routable IP across the VLAN boundary. Inter-VLAN routing is handled by the firewall, which restricts inbound traffic so that only the DMZ proxy can reach the app on TCP/3000.
 
 Replace `<app-ip>` throughout this document with the IP address assigned to the app container on the App VLAN.
 
@@ -23,7 +23,7 @@ Before configuring the proxy, ensure:
 ```
 Internet
    |
-[Palo Alto Firewall]
+[Firewall]
    |                              |
 DMZ                           App VLAN (Internal)
    |                              |
@@ -37,7 +37,7 @@ DMZ                           App VLAN (Internal)
                           [PostgreSQL]   [Redis]
 ```
 
-The Palo Alto firewall permits only the DMZ proxy to reach the app on TCP/3000. All other inbound traffic to the app's IP is denied. The `backend` Docker network is marked internal -- PostgreSQL and Redis have no external routing.
+The firewall permits only the DMZ proxy to reach the app on TCP/3000. All other inbound traffic to the app's IP is denied. The `backend` Docker network is marked internal -- PostgreSQL and Redis have no external routing.
 
 ---
 
@@ -99,7 +99,7 @@ onboarding.corp.example.com {
             header_up X-Forwarded-Host  {host}
             header_up Host              {host}
 
-            # Request correlation ID for tracing across Palo Alto, proxy, and app logs.
+            # Request correlation ID for tracing across firewall, proxy, and app logs.
             # The app reads this in middleware and echoes it on the response.
             header_up X-Request-ID {http.request.uuid}
         }
@@ -212,7 +212,7 @@ server {
         proxy_set_header X-Forwarded-Host  $host;
         proxy_set_header Host              $host;
 
-        # Request correlation ID for tracing across Palo Alto, proxy, and app logs.
+        # Request correlation ID for tracing across firewall, proxy, and app logs.
         # The app reads this in middleware and echoes it on the response.
         proxy_set_header X-Request-ID $request_id;
 

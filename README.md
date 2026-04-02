@@ -124,7 +124,7 @@ This section covers deploying the application in a production or staging environ
 ```
 Internet
    |
-[Palo Alto Firewall]
+[Firewall]
    |                              |
 DMZ                           App VLAN (Internal)
    |                              |
@@ -138,7 +138,7 @@ DMZ                           App VLAN (Internal)
                           [PostgreSQL] [Redis]
 ```
 
-The reverse proxy container on the DMZ is the sole ingress point for the application. The Palo Alto firewall permits only the DMZ to reach the app on TCP/3000 -- all other inbound traffic to the app's IP is denied. The app container attaches to a macvlan/ipvlan network for its routable App VLAN IP and to the `backend` Docker network for database and Redis access. The `backend` network is marked `internal: true`, so PostgreSQL and Redis are unreachable from outside Docker.
+The reverse proxy container on the DMZ is the sole ingress point for the application. The firewall permits only the DMZ to reach the app on TCP/3000 -- all other inbound traffic to the app's IP is denied. The app container attaches to a macvlan/ipvlan network for its routable App VLAN IP and to the `backend` Docker network for database and Redis access. The `backend` network is marked `internal: true`, so PostgreSQL and Redis are unreachable from outside Docker.
 
 Replace `<app-ip>` throughout this section with the IP address assigned to the app container on the App VLAN.
 
@@ -147,7 +147,7 @@ Replace `<app-ip>` throughout this section with the IP address assigned to the a
 - A Linux host (or VM) with Docker and Docker Compose v2 installed
 - A TLS certificate for the external hostname
 - A reverse proxy container on the DMZ (Caddy recommended; Nginx, Traefik, and HAProxy also work) -- see [REVERSE_PROXY.md](REVERSE_PROXY.md) for complete configurations
-- Inter-VLAN routing between the DMZ and App VLAN via the Palo Alto firewall, with a rule allowing TCP/3000 from the proxy to the app
+- Inter-VLAN routing between the DMZ and App VLAN via the firewall, with a rule allowing TCP/3000 from the proxy to the app
 - A macvlan or ipvlan Docker network providing the app container a routable IP on the App VLAN
 - Network access from the host to an SMTP server or Microsoft Graph API (if email notifications are needed)
 
@@ -405,7 +405,7 @@ Admin users can also view logs in the web UI under **Admin > Logs** with level a
 - Login rate limiting keys on username when no reverse proxy is configured, preventing global lockout DoS
 - Cron secret compared with `crypto.timingSafeEqual` to prevent timing attacks
 - Users are never deleted, only deactivated, to preserve audit trails
-- Docker network isolation: database and Redis on an internal bridge network with no external routing; app exposed only on the App VLAN with Palo Alto firewall restricting inbound to the DMZ proxy on TCP/3000
+- Docker network isolation: database and Redis on an internal bridge network with no external routing; app exposed only on the App VLAN with firewall restricting inbound to the DMZ proxy on TCP/3000
 - API responses include `Cache-Control: no-store` to prevent proxy/browser caching of authenticated data
 - All 429 responses include `Retry-After` headers per RFC 6585
 - `X-Request-ID` propagated from reverse proxy through the app for end-to-end request tracing

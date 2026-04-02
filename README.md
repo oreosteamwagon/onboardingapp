@@ -117,31 +117,38 @@ npm test
 
 ## Production Deployment (Docker Compose)
 
-This section covers deploying the application in a production or staging environment using Docker Compose. The app runs inside a container, listens on `127.0.0.1:3000`, and must be fronted by a TLS-terminating reverse proxy.
+This section covers deploying the application in a production or staging environment using Docker Compose. The app container runs on the App VLAN (internal network) and listens on port 3000. It must be fronted by a TLS-terminating reverse proxy running on the DMZ, which forwards traffic to the app's routable IP across the VLAN boundary.
 
 ### Architecture
 
 ```
 Internet
    |
-[Palo Alto / Firewall]
-   |
-[Reverse Proxy (Caddy, Nginx, etc.)]  -- terminates TLS, forwards to 127.0.0.1:3000
-   |
-[OnboardingApp container] -- app on frontend + backend networks
-   |
-[backend network (internal, no external routing)]
-   |          |
-[PostgreSQL] [Redis]
+[Palo Alto Firewall]
+   |                              |
+DMZ                           App VLAN (Internal)
+   |                              |
+[Reverse Proxy container]   [OnboardingApp container]
+ Caddy / Nginx                <app-ip>:3000
+   |                              |
+   +--- TCP/3000 (allowed) ----->+
+                                  |
+                          [backend Docker network (internal)]
+                              |          |
+                          [PostgreSQL] [Redis]
 ```
 
-The `backend` Docker network is marked `internal: true`, so the database and Redis are unreachable from outside Docker. Only the app container bridges both the frontend and backend networks.
+The reverse proxy container on the DMZ is the sole ingress point for the application. The Palo Alto firewall permits only the DMZ to reach the app on TCP/3000 -- all other inbound traffic to the app's IP is denied. The app container attaches to a macvlan/ipvlan network for its routable App VLAN IP and to the `backend` Docker network for database and Redis access. The `backend` network is marked `internal: true`, so PostgreSQL and Redis are unreachable from outside Docker.
+
+Replace `<app-ip>` throughout this section with the IP address assigned to the app container on the App VLAN.
 
 ### Prerequisites
 
 - A Linux host (or VM) with Docker and Docker Compose v2 installed
 - A TLS certificate for the external hostname
-- A reverse proxy (Caddy recommended for simplest setup; Nginx, Traefik, and HAProxy also work) -- see [REVERSE_PROXY.md](REVERSE_PROXY.md) for complete configurations
+- A reverse proxy container on the DMZ (Caddy recommended; Nginx, Traefik, and HAProxy also work) -- see [REVERSE_PROXY.md](REVERSE_PROXY.md) for complete configurations
+- Inter-VLAN routing between the DMZ and App VLAN via the Palo Alto firewall, with a rule allowing TCP/3000 from the proxy to the app
+- A macvlan or ipvlan Docker network providing the app container a routable IP on the App VLAN
 - Network access from the host to an SMTP server or Microsoft Graph API (if email notifications are needed)
 
 ### Step 1. Clone the repository
@@ -268,7 +275,7 @@ Starting application...
 
 ### Step 5. Configure the reverse proxy
 
-Set up your reverse proxy to terminate TLS and forward traffic to `127.0.0.1:3000`. Ready-to-use configurations for both Caddy and Nginx are provided in **[REVERSE_PROXY.md](REVERSE_PROXY.md)**.
+Set up your reverse proxy on the DMZ to terminate TLS and forward traffic to `<app-ip>:3000`, where `<app-ip>` is the app container's routable IP on the App VLAN. Ready-to-use configurations for both Caddy and Nginx are provided in **[REVERSE_PROXY.md](REVERSE_PROXY.md)**.
 
 The proxy must:
 - Terminate TLS with TLSv1.2+ and strong ciphers
@@ -308,28 +315,30 @@ Use the **Send Test Email** button to verify the configuration.
 
 ### Step 8. Schedule cron jobs (optional)
 
-Two endpoints should be called by an internal scheduler. These must be called from the trust zone (not through the reverse proxy, which blocks `/api/cron/*`).
+Two endpoints should be called by an internal scheduler on the App VLAN. These must be called directly to the app's IP (not through the reverse proxy, which blocks `/api/cron/*`). Replace `<app-ip>` below with the app container's actual IP on the App VLAN.
 
 **Overdue task reminders** -- call daily:
 ```bash
-curl -X POST http://127.0.0.1:3000/api/cron/overdue-tasks \
+curl -X POST http://<app-ip>:3000/api/cron/overdue-tasks \
   -H "X-Cron-Secret: <your-cron-secret>"
 ```
 
 **Log retention cleanup** -- call weekly:
 ```bash
-curl -X POST http://127.0.0.1:3000/api/cron/log-cleanup \
+curl -X POST http://<app-ip>:3000/api/cron/log-cleanup \
   -H "X-Cron-Secret: <your-cron-secret>"
 ```
 
 Example crontab on the Docker host:
 ```cron
 # Daily at 2 AM -- overdue task reminders
-0 2 * * * curl -sf -X POST http://127.0.0.1:3000/api/cron/overdue-tasks -H "X-Cron-Secret: <secret>" > /dev/null
+0 2 * * * curl -sf -X POST http://<app-ip>:3000/api/cron/overdue-tasks -H "X-Cron-Secret: <secret>" > /dev/null
 
 # Sunday at 3 AM -- log retention cleanup
-0 3 * * 0 curl -sf -X POST http://127.0.0.1:3000/api/cron/log-cleanup -H "X-Cron-Secret: <secret>" > /dev/null
+0 3 * * 0 curl -sf -X POST http://<app-ip>:3000/api/cron/log-cleanup -H "X-Cron-Secret: <secret>" > /dev/null
 ```
+
+Note: with macvlan networking, the Docker host cannot reach its own container's macvlan IP by default. You may need a macvlan shim interface on the host, or run cron from another host on the App VLAN that can route to the container IP.
 
 ### Stopping and updating
 
@@ -396,7 +405,7 @@ Admin users can also view logs in the web UI under **Admin > Logs** with level a
 - Login rate limiting keys on username when no reverse proxy is configured, preventing global lockout DoS
 - Cron secret compared with `crypto.timingSafeEqual` to prevent timing attacks
 - Users are never deleted, only deactivated, to preserve audit trails
-- Docker network isolation: database and Redis on an internal network with no external routing
+- Docker network isolation: database and Redis on an internal bridge network with no external routing; app exposed only on the App VLAN with Palo Alto firewall restricting inbound to the DMZ proxy on TCP/3000
 - API responses include `Cache-Control: no-store` to prevent proxy/browser caching of authenticated data
 - All 429 responses include `Retry-After` headers per RFC 6585
 - `X-Request-ID` propagated from reverse proxy through the app for end-to-end request tracing

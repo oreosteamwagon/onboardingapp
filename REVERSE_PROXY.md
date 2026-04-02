@@ -1,8 +1,10 @@
 # Reverse Proxy Configuration Requirements
 
-This document describes how to configure the reverse proxy that sits in front of the OnboardingApp in a DMZ deployment. Configurations are provided for Caddy (recommended) and Nginx. Adapt to your proxy of choice (Traefik, HAProxy, etc.) using the header and path requirements below.
+This document describes how to configure the reverse proxy that sits in front of the OnboardingApp. Configurations are provided for Caddy (recommended) and Nginx. Adapt to your proxy of choice (Traefik, HAProxy, etc.) using the header and path requirements below.
 
-The app listens on `127.0.0.1:3000` (HTTP, no TLS). The reverse proxy terminates TLS and forwards requests to the app over the loopback interface.
+The reverse proxy container runs on the DMZ and terminates TLS. The app container runs on the App VLAN (internal network) and listens on port 3000 (HTTP, no TLS). The proxy forwards requests to the app's routable IP across the VLAN boundary. Inter-VLAN routing is handled by the Palo Alto firewall, which restricts inbound traffic so that only the DMZ proxy can reach the app on TCP/3000.
+
+Replace `<app-ip>` throughout this document with the IP address assigned to the app container on the App VLAN.
 
 ---
 
@@ -13,6 +15,29 @@ Before configuring the proxy, ensure:
 1. `NEXTAUTH_URL` is set to the external HTTPS URL (e.g. `https://onboarding.corp.example.com`).
 2. `TRUST_PROXY=true` is set in the app environment so rate limiting keys on the real client IP from `X-Forwarded-For`.
 3. A TLS certificate and private key are available for the external hostname.
+
+---
+
+## Network Architecture
+
+```
+Internet
+   |
+[Palo Alto Firewall]
+   |                              |
+DMZ                           App VLAN (Internal)
+   |                              |
+[Reverse Proxy]              [OnboardingApp]         [Docker host]
+ Caddy / Nginx                <app-ip>:3000           (cron jobs)
+   |                              |
+   +--- TCP/3000 (allowed) ----->+
+                                  |
+                          [backend Docker network (internal)]
+                              |            |
+                          [PostgreSQL]   [Redis]
+```
+
+The Palo Alto firewall permits only the DMZ proxy to reach the app on TCP/3000. All other inbound traffic to the app's IP is denied. The `backend` Docker network is marked internal -- PostgreSQL and Redis have no external routing.
 
 ---
 
@@ -47,7 +72,7 @@ onboarding.corp.example.com {
     # Health check endpoint (no rate limiting, no access log)
     # -------------------------------------------------------------------
     handle /api/health {
-        reverse_proxy 127.0.0.1:3000 {
+        reverse_proxy <app-ip>:3000 {
             header_up Host {host}
         }
         log {
@@ -63,7 +88,7 @@ onboarding.corp.example.com {
         # Requires the caddy-ratelimit plugin (not included in standard Caddy)
         # rate_limit {remote.ip} 30r/s
 
-        reverse_proxy 127.0.0.1:3000 {
+        reverse_proxy <app-ip>:3000 {
             # --- Headers (security-critical) ---
 
             # Strip any client-supplied forwarded headers, then set real values.
@@ -93,7 +118,7 @@ onboarding.corp.example.com {
 ### Notes on Caddy
 
 - Caddy handles HTTPS redirects automatically -- no separate HTTP server block is needed.
-- `{remote_host}` gives the direct client IP. If Caddy sits behind another proxy (e.g. a load balancer), use the `trusted_proxies` directive and `{client_ip}` placeholder instead.
+- `{remote_host}` gives the direct client IP as seen by Caddy. If Caddy sits behind an additional proxy (e.g. a load balancer), use the `trusted_proxies` directive and `{client_ip}` placeholder instead.
 - `{http.request.uuid}` generates a unique ID per request (requires Caddy 2.7+). For older versions, use a plugin or let the app generate its own ID (it does this as a fallback).
 - Caddy's default timeouts are reasonable for most deployments. Adjust with `servers` global options if needed.
 
@@ -175,7 +200,7 @@ server {
     location / {
         limit_req zone=general burst=60 nodelay;
 
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://<app-ip>:3000;
 
         # --- Headers (security-critical) ---
 
@@ -206,7 +231,7 @@ server {
     # Health check endpoint (for upstream monitoring, not user-facing)
     # -------------------------------------------------------------------
     location = /api/health {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://<app-ip>:3000;
         proxy_set_header Host $host;
 
         # No rate limiting on health probes
@@ -236,7 +261,7 @@ server {
 
 | Path | Action | Reason |
 |------|--------|--------|
-| `/api/cron/*` | `403` | Cron endpoints are protected by a shared secret but should only be called from an internal scheduler, not exposed to the internet. Schedule calls from a host in the trust zone directly to `127.0.0.1:3000`. |
+| `/api/cron/*` | `403` | Cron endpoints are protected by a shared secret but should only be called from an internal scheduler, not exposed to the internet. Schedule calls from a host on the App VLAN directly to `http://<app-ip>:3000`. |
 | `/api/admin/factory-reset` | `403` | Destructive endpoint that deletes all data. The app also has an `DISABLE_FACTORY_RESET` env guard, but blocking at the proxy is defense-in-depth. |
 | `/uploads/` | `404` | Files are served through authenticated API routes (`/api/documents/[id]/download`, `/api/attachments/[id]/download`). Direct filesystem access must be blocked. |
 

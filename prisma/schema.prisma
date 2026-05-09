@@ -20,6 +20,7 @@ enum TaskType {
   STANDARD
   UPLOAD
   LEARNING
+  SUPERVISOR_ACTION
 }
 
 enum ApprovalStatus {
@@ -108,6 +109,12 @@ model BrandingSetting {
   updatedAt    DateTime @updatedAt
 }
 
+model AppSetting {
+  id                  String   @id @default(cuid())
+  autoOffboardEnabled Boolean  @default(false)
+  updatedAt           DateTime @updatedAt
+}
+
 model DocumentCategory {
   id        String   @id @default(cuid())
   slug      String   @unique
@@ -172,6 +179,7 @@ model Document {
   category    String           @default("general")
   uploadedAt  DateTime         @default(now())
   isResource  Boolean          @default(false)
+  encrypted   Boolean          @default(false)
   uploader    User             @relation(fields: [uploadedBy], references: [id])
   // userTask is null for general documents; set when document proves an UPLOAD task completion
   userTask    UserTask?

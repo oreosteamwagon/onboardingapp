@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db'
 // workflow membership, NOT by canUploadDocuments (which gates general document uploads to HR+).
 import { canCompleteUploadTask } from '@/lib/permissions'
 import { checkUploadRateLimit } from '@/lib/ratelimit'
-import { saveUpload, UploadError } from '@/lib/upload'
+import { saveEncryptedUpload, UploadError } from '@/lib/upload'
 import { verifyActiveSession } from '@/lib/session'
 import type { Role } from '@prisma/client'
 import { notifyApprovalNeeded } from '@/lib/email'
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   let storagePath: string
   let filename: string
   try {
-    const saved = await saveUpload(buffer, fileEntry.name)
+    const saved = await saveEncryptedUpload(buffer, fileEntry.name)
     storagePath = saved.storagePath
     filename = saved.filename
   } catch (err) {
@@ -119,6 +119,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
           filename,
           storagePath,
           category: 'task-upload',
+          encrypted: true,
         },
       })
 

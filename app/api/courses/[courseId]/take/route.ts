@@ -6,6 +6,7 @@ import { verifyActiveSession } from '@/lib/session'
 import { sanitizeCourseHtml } from '@/lib/sanitize'
 import { validateCuid, validateAnswerSubmission } from '@/lib/validation'
 import { checkAndNotifyWorkflowCompletion } from '@/lib/email'
+import { checkAndOffboardUser } from '@/lib/offboard'
 import type { Role } from '@prisma/client'
 
 interface RouteContext {
@@ -264,6 +265,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   if (passed) {
     void checkAndNotifyWorkflowCompletion(session.user.id, taskId as string)
+    void checkAndOffboardUser(session.user.id)
   }
 
   return NextResponse.json({

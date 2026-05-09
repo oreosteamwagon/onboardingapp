@@ -50,6 +50,10 @@ interface ChecklistViewProps {
   userId: string
   isOwnPage: boolean
   viewerCanManageAttachments: boolean
+  viewerCanManageSupervisorTasks: boolean
+  viewerIsAdmin: boolean
+  isFullyApproved: boolean
+  targetUsername: string
 }
 
 export default function ChecklistView({
@@ -57,11 +61,18 @@ export default function ChecklistView({
   userId,
   isOwnPage,
   viewerCanManageAttachments,
+  viewerCanManageSupervisorTasks,
+  viewerIsAdmin,
+  isFullyApproved,
+  targetUsername,
 }: ChecklistViewProps) {
   const [groups, setGroups] = useState(workflows)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState<string | null>(null)
   const [attachmentLoading, setAttachmentLoading] = useState<string | null>(null)
+  const [showOffboardConfirm, setShowOffboardConfirm] = useState(false)
+  const [offboarding, setOffboarding] = useState(false)
+  const [offboarded, setOffboarded] = useState(false)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const attachmentInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
@@ -86,7 +97,7 @@ export default function ChecklistView({
   }
 
   async function handleToggle(taskId: string, currentlyCompleted: boolean) {
-    if (!isOwnPage) return
+    if (!isOwnPage && !viewerCanManageSupervisorTasks) return
     setError(null)
 
     try {
@@ -112,6 +123,27 @@ export default function ChecklistView({
       })
     } catch {
       setError('Unexpected error updating task.')
+    }
+  }
+
+  async function handleOffboard() {
+    setOffboarding(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/users/${userId}/offboard`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error ?? 'Failed to complete offboarding')
+        setShowOffboardConfirm(false)
+        return
+      }
+      setOffboarded(true)
+      setShowOffboardConfirm(false)
+    } catch {
+      setError('Unexpected error during offboarding.')
+      setShowOffboardConfirm(false)
+    } finally {
+      setOffboarding(false)
     }
   }
 
@@ -227,6 +259,67 @@ export default function ChecklistView({
         </div>
       )}
 
+      {offboarded && (
+        <div
+          role="status"
+          className="rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800"
+        >
+          Onboarding complete. {targetUsername}&apos;s account has been removed.
+        </div>
+      )}
+
+      {isFullyApproved && viewerIsAdmin && !isOwnPage && !offboarded && (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-start gap-2">
+            <svg className="h-5 w-5 text-green-600 mt-0.5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-green-900">All tasks complete and approved</p>
+              <p className="text-xs text-green-700 mt-0.5">
+                You can now complete this user&apos;s onboarding. This will send notifications and permanently remove their account and uploaded files.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowOffboardConfirm(true)}
+            className="shrink-0 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
+          >
+            Complete Onboarding &amp; Remove Account
+          </button>
+        </div>
+      )}
+
+      {showOffboardConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-2">Remove account?</h3>
+            <p className="text-sm text-gray-600 mb-1">
+              This will permanently delete <strong>{targetUsername}</strong>&apos;s account and all their uploaded files.
+            </p>
+            <p className="text-sm text-gray-600 mb-5">
+              Notification emails will be sent to the user, their supervisor(s), and all HR/Payroll staff. <strong>This cannot be undone.</strong>
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowOffboardConfirm(false)}
+                disabled={offboarding}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleOffboard}
+                disabled={offboarding}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md disabled:opacity-50"
+              >
+                {offboarding ? 'Removing...' : 'Confirm & Remove Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {groups.map((group) => (
         <section key={group.id}>
           <div className="mb-3">
@@ -246,7 +339,15 @@ export default function ChecklistView({
           ) : (
             <ul className="space-y-3">
               {group.tasks.map((task) =>
-                task.taskType === 'LEARNING' ? (
+                task.taskType === 'SUPERVISOR_ACTION' ? (
+                  <SupervisorTaskItem
+                    key={task.id}
+                    task={task}
+                    isOwnPage={isOwnPage}
+                    viewerCanManageSupervisorTasks={viewerCanManageSupervisorTasks}
+                    onToggle={() => handleToggle(task.id, task.completed)}
+                  />
+                ) : task.taskType === 'LEARNING' ? (
                   <LearningTaskItem
                     key={task.id}
                     task={task}
@@ -403,6 +504,71 @@ function AttachmentsSection({
         </div>
       )}
     </div>
+  )
+}
+
+// ---- SUPERVISOR_ACTION task item ----
+
+function SupervisorTaskItem({
+  task,
+  isOwnPage,
+  viewerCanManageSupervisorTasks,
+  onToggle,
+}: {
+  task: TaskItem
+  isOwnPage: boolean
+  viewerCanManageSupervisorTasks: boolean
+  onToggle: () => void
+}) {
+  return (
+    <li className={`bg-white rounded-lg shadow px-6 py-4 flex items-start gap-4 ${task.completed ? 'opacity-70' : ''}`}>
+      <div className="mt-1 h-4 w-4 shrink-0 flex items-center justify-center">
+        {viewerCanManageSupervisorTasks ? (
+          <input
+            type="checkbox"
+            checked={task.completed}
+            onChange={onToggle}
+            className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+            aria-label={task.completed ? 'Mark incomplete' : 'Mark complete'}
+          />
+        ) : task.completed ? (
+          <svg className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        ) : (
+          <svg className="h-4 w-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-2 mb-0.5">
+          <p className={`text-sm font-medium ${task.completed ? 'text-gray-400' : 'text-gray-900'}`}>
+            {task.title}
+          </p>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+            Supervisor Action
+          </span>
+        </div>
+        {task.description && (
+          <p className="text-sm text-gray-500 mt-0.5">{task.description}</p>
+        )}
+        <div className="mt-1">
+          {task.completed && task.approvedByUsername ? (
+            <span className="text-xs text-green-700">
+              Confirmed by {task.approvedByUsername}
+              {task.approvedAt && (
+                <span className="text-gray-400"> &mdash; {new Date(task.approvedAt).toLocaleDateString()}</span>
+              )}
+            </span>
+          ) : isOwnPage ? (
+            <span className="text-xs text-gray-400">Your supervisor will confirm this step</span>
+          ) : (
+            <span className="text-xs text-gray-400">{task.completed ? 'Completed' : 'Not yet confirmed'}</span>
+          )}
+        </div>
+      </div>
+    </li>
   )
 }
 

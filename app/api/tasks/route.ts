@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { canManageTasks } from '@/lib/permissions'
+import { canManageTasks, canApprove, canApproveAny } from '@/lib/permissions'
 import { checkTaskMgmtRateLimit, checkTaskCompletionRateLimit } from '@/lib/ratelimit'
 import {
   validateTitle,
@@ -16,6 +16,7 @@ import { log } from '@/lib/logger'
 import { verifyActiveSession } from '@/lib/session'
 import type { Role, TaskType } from '@prisma/client'
 import { notifyApprovalNeeded } from '@/lib/email'
+import { checkAndOffboardUser } from '@/lib/offboard'
 
 const MAX_LIMIT = 100
 
@@ -198,12 +199,104 @@ export async function PATCH(req: NextRequest) {
     )
   }
 
-  // Object-level check: users can only update their own task records
+  const role = session.user.role as Role
+
+  // Supervisor completing a SUPERVISOR_ACTION task on behalf of an onboarding user
   if (userId !== session.user.id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (!canApprove(role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const task = await prisma.onboardingTask.findUnique({
+      where: { id: taskId },
+      select: { taskType: true },
+    })
+
+    if (!task) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    }
+
+    if (task.taskType !== 'SUPERVISOR_ACTION') {
+      return NextResponse.json(
+        { error: 'Only SUPERVISOR_ACTION tasks can be completed on behalf of a user' },
+        { status: 409 },
+      )
+    }
+
+    // Scope check: HR/PAYROLL/ADMIN may complete for any user; SUPERVISOR only for their workflows
+    if (!canApproveAny(role)) {
+      const scopedMembership = await prisma.workflowTask.findFirst({
+        where: {
+          taskId,
+          workflow: {
+            userWorkflows: {
+              some: {
+                userId,
+                supervisorId: session.user.id,
+              },
+            },
+          },
+        },
+      })
+      if (!scopedMembership) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    } else {
+      // HR+: just confirm the task is assigned to this user via any workflow
+      const anyMembership = await prisma.workflowTask.findFirst({
+        where: {
+          taskId,
+          workflow: { userWorkflows: { some: { userId } } },
+        },
+      })
+      if (!anyMembership) {
+        return NextResponse.json({ error: 'Task not assigned to this user' }, { status: 403 })
+      }
+    }
+
+    const existingUserTask = completed
+      ? null
+      : await prisma.userTask.findUnique({
+          where: { userId_taskId: { userId, taskId } },
+          select: { approvedById: true },
+        })
+
+    // Only HR+ or the supervisor who originally confirmed it can uncheck
+    if (!completed && existingUserTask) {
+      const isOriginalCompleter = existingUserTask.approvedById === session.user.id
+      if (!canApproveAny(role) && !isOriginalCompleter) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
+    const userTask = await prisma.userTask.upsert({
+      where: { userId_taskId: { userId, taskId } },
+      update: {
+        completed,
+        completedAt: completed ? new Date() : null,
+        approvalStatus: completed ? 'APPROVED' : 'PENDING',
+        approvedAt: completed ? new Date() : null,
+        approvedById: completed ? session.user.id : null,
+      },
+      create: {
+        userId,
+        taskId,
+        completed,
+        completedAt: completed ? new Date() : null,
+        approvalStatus: completed ? 'APPROVED' : 'PENDING',
+        approvedAt: completed ? new Date() : null,
+        approvedById: completed ? session.user.id : null,
+      },
+    })
+
+    if (completed) {
+      void checkAndOffboardUser(userId)
+    }
+
+    return NextResponse.json(userTask)
   }
 
-  // Verify task exists and is STANDARD type
+  // Standard: user completing their own task
   const task = await prisma.onboardingTask.findUnique({
     where: { id: taskId },
     select: { taskType: true },
@@ -213,7 +306,6 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Task not found' }, { status: 404 })
   }
 
-  // UPLOAD tasks are completed via file upload only — not by checkbox
   if (task.taskType === 'UPLOAD') {
     return NextResponse.json(
       { error: 'UPLOAD tasks must be completed by uploading a file' },
@@ -221,10 +313,16 @@ export async function PATCH(req: NextRequest) {
     )
   }
 
-  // LEARNING tasks are completed by taking the associated course
   if (task.taskType === 'LEARNING') {
     return NextResponse.json(
       { error: 'LEARNING tasks are completed by taking the associated course' },
+      { status: 409 },
+    )
+  }
+
+  if (task.taskType === 'SUPERVISOR_ACTION') {
+    return NextResponse.json(
+      { error: 'SUPERVISOR_ACTION tasks must be completed by a supervisor' },
       { status: 409 },
     )
   }
@@ -250,7 +348,6 @@ export async function PATCH(req: NextRequest) {
     update: {
       completed,
       completedAt: completed ? new Date() : null,
-      // Un-completing resets approval status
       approvalStatus: completed ? undefined : 'PENDING',
       approvedAt: completed ? undefined : null,
       approvedById: completed ? undefined : null,

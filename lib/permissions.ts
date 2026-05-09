@@ -79,10 +79,15 @@ export function canViewAllDocuments(role: Role): boolean {
   return canApproveAny(role)
 }
 
-// Any approver role (SUPERVISOR+) may download a document for review purposes.
+// Any approver role (SUPERVISOR+) may download a resource or general document.
 // The caller must also check whether the requester is the uploader.
 export function canDownloadDocument(role: Role): boolean {
   return canApprove(role)
+}
+
+// PAYROLL+ may download an encrypted task submission (SUPERVISOR and below are excluded).
+export function canDownloadTaskUpload(role: Role): boolean {
+  return hasRole(role, Role.PAYROLL)
 }
 
 // HR+ may upload or delete attachments on any user's task assignment

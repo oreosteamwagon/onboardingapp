@@ -557,6 +557,53 @@ export async function checkAndNotifyWorkflowCompletion(userId: string, taskId: s
 }
 
 // ---------------------------------------------------------------------------
+// Notification: onboarding completion / offboarding
+// ---------------------------------------------------------------------------
+
+export async function notifyOnboardingComplete(opts: {
+  userName: string
+  userEmail: string
+  supervisorEmails: string[]
+  staffUsers: Array<{ email: string; firstName: string | null }>
+}): Promise<void> {
+  const { userName, userEmail, supervisorEmails, staffUsers } = opts
+
+  // Thank-you email to the user
+  dispatchEmail(
+    userEmail,
+    'Your onboarding is complete',
+    emailHtml('Onboarding Complete', [
+      `Hi ${esc(userName)},`,
+      'Congratulations — you have successfully completed your onboarding.',
+      'Your account access has now ended. Thank you for completing the process, and welcome to the team!',
+      'If you have any questions, please reach out to your supervisor or HR.',
+    ]),
+  )
+
+  // Notification to supervisors and HR/PAYROLL/ADMIN staff
+  const staffSubject = `Onboarding complete: ${userName}`
+  const staffBody = (recipientFirstName: string | null) => {
+    const greeting = recipientFirstName ? `Hi ${recipientFirstName},` : 'Hello,'
+    return emailHtml('Onboarding Complete', [
+      greeting,
+      `The following user has completed all onboarding tasks and their account has been removed from the system.`,
+      '&nbsp;',
+      `<strong>User:</strong> ${esc(userName)}`,
+      '&nbsp;',
+      'No further action is required.',
+    ])
+  }
+
+  for (const email of supervisorEmails) {
+    dispatchEmail(email, staffSubject, staffBody(null))
+  }
+
+  for (const staff of staffUsers) {
+    dispatchEmail(staff.email, staffSubject, staffBody(staff.firstName))
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Overdue task processing (called by cron endpoint)
 // ---------------------------------------------------------------------------
 

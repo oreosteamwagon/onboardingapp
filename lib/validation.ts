@@ -1,6 +1,6 @@
 import type { TaskType, ApprovalStatus } from '@prisma/client'
 
-export const VALID_TASK_TYPES: readonly TaskType[] = ['STANDARD', 'UPLOAD', 'LEARNING'] as const
+export const VALID_TASK_TYPES: readonly TaskType[] = ['STANDARD', 'UPLOAD', 'LEARNING', 'SUPERVISOR_ACTION'] as const
 export const VALID_APPROVAL_ACTIONS: readonly ApprovalStatus[] = ['APPROVED', 'REJECTED'] as const
 
 // CUID format: starts with 'c', followed by 24 alphanumeric chars (lowercase)

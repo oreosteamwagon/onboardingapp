@@ -8,6 +8,7 @@ const TASK_TYPES: { value: TaskType; label: string; hint: string }[] = [
   { value: 'STANDARD', label: 'Standard', hint: 'User confirms with a checkbox' },
   { value: 'UPLOAD', label: 'File Upload', hint: 'User must upload a document' },
   { value: 'LEARNING', label: 'Learning Course', hint: 'User takes a course and passes a quiz' },
+  { value: 'SUPERVISOR_ACTION', label: 'Supervisor Action', hint: 'Supervisor confirms this step with the user' },
 ]
 
 interface ResourceDoc {
@@ -327,6 +328,13 @@ function TaskTypeBadge({ type }: { type: TaskType }) {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
         Learning Course
+      </span>
+    )
+  }
+  if (type === 'SUPERVISOR_ACTION') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+        Supervisor Action
       </span>
     )
   }

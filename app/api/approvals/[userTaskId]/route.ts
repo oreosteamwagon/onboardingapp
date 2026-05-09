@@ -7,6 +7,7 @@ import { verifyActiveSession } from '@/lib/session'
 import { validateApprovalAction } from '@/lib/validation'
 import type { Role, ApprovalStatus } from '@prisma/client'
 import { checkAndNotifyWorkflowCompletion } from '@/lib/email'
+import { checkAndOffboardUser } from '@/lib/offboard'
 
 interface RouteContext {
   params: { userTaskId: string }
@@ -136,6 +137,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   if (action === 'APPROVED') {
     void checkAndNotifyWorkflowCompletion(userTask.userId, userTask.taskId)
+    void checkAndOffboardUser(userTask.userId)
   }
 
   return NextResponse.json(updated)

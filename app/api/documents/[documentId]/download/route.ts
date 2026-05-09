@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { canDownloadDocument } from '@/lib/permissions'
+import { canDownloadDocument, canDownloadTaskUpload } from '@/lib/permissions'
 import { checkDocumentDownloadRateLimit } from '@/lib/ratelimit'
 import { logError } from '@/lib/logger'
 import { validateCuid } from '@/lib/validation'
 import { verifyActiveSession } from '@/lib/session'
 import { createReadStream } from 'fs'
-import { stat } from 'fs/promises'
+import { stat, readFile } from 'fs/promises'
+import { createDecipheriv } from 'crypto'
 import { Readable } from 'stream'
 import { join, extname } from 'path'
 import type { Role } from '@prisma/client'
@@ -51,7 +52,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
   const document = await prisma.document.findUnique({
     where: { id: params.documentId },
-    select: { id: true, uploadedBy: true, filename: true, storagePath: true, url: true, isResource: true },
+    select: { id: true, uploadedBy: true, filename: true, storagePath: true, url: true, isResource: true, encrypted: true },
   })
 
   if (!document) {
@@ -77,9 +78,15 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   const isUploader = session.user.id === document.uploadedBy
   const role = session.user.role as Role
 
-  // Resources are downloadable by any authenticated user
-  if (!document.isResource && !isUploader && !canDownloadDocument(role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  // Resources are downloadable by any authenticated user.
+  // Encrypted task submissions require HR+; other non-resource docs require SUPERVISOR+.
+  if (!document.isResource && !isUploader) {
+    const allowed = document.encrypted
+      ? canDownloadTaskUpload(role)
+      : canDownloadDocument(role)
+    if (!allowed) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
   }
 
   // storagePath is a UUID+ext written by our own code. Validate it contains no
@@ -96,6 +103,53 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
   const filePath = join(UPLOAD_DIR, document.storagePath as string)
 
+  const ext = extname(document.storagePath as string).toLowerCase()
+  const contentType = EXT_TO_MIME[ext] ?? 'application/octet-stream'
+  const encodedFilename = encodeURIComponent(document.filename)
+
+  const sharedHeaders = {
+    'Content-Type': contentType,
+    'Content-Disposition': `attachment; filename*=UTF-8''${encodedFilename}`,
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+  }
+
+  if (document.encrypted) {
+    // GCM auth tag verification requires the full ciphertext — can't stream.
+    // On-disk format: [12B IV][16B auth tag][ciphertext]
+    let encryptedBuffer: Buffer
+    try {
+      encryptedBuffer = await readFile(filePath)
+    } catch {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 })
+    }
+
+    const hexKey = process.env.FILE_ENCRYPTION_KEY
+    if (!hexKey || hexKey.length !== 64) {
+      logError({ message: 'FILE_ENCRYPTION_KEY missing or invalid', action: 'document_download', userId: session.user.id, meta: { documentId: document.id } })
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    }
+    const key = Buffer.from(hexKey, 'hex')
+    const iv = encryptedBuffer.subarray(0, 12)
+    const tag = encryptedBuffer.subarray(12, 28)
+    const ciphertext = encryptedBuffer.subarray(28)
+
+    let decrypted: Buffer
+    try {
+      const decipher = createDecipheriv('aes-256-gcm', key, iv)
+      decipher.setAuthTag(tag)
+      decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])
+    } catch {
+      logError({ message: 'Decryption failed for document', action: 'document_download', userId: session.user.id, meta: { documentId: document.id } })
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    }
+
+    return new NextResponse(new Uint8Array(decrypted), {
+      status: 200,
+      headers: { ...sharedHeaders, 'Content-Length': String(decrypted.length) },
+    })
+  }
+
   let fileSize: number
   try {
     const stats = await stat(filePath)
@@ -104,22 +158,10 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'File not found' }, { status: 404 })
   }
 
-  const ext = extname(document.storagePath as string).toLowerCase()
-  const contentType = EXT_TO_MIME[ext] ?? 'application/octet-stream'
-
-  // RFC 5987 encoded filename for Content-Disposition
-  const encodedFilename = encodeURIComponent(document.filename)
-
   const webStream = Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>
 
   return new NextResponse(webStream, {
     status: 200,
-    headers: {
-      'Content-Type': contentType,
-      'Content-Disposition': `attachment; filename*=UTF-8''${encodedFilename}`,
-      'Content-Length': String(fileSize),
-      'Cache-Control': 'no-store',
-      'X-Content-Type-Options': 'nosniff',
-    },
+    headers: { ...sharedHeaders, 'Content-Length': String(fileSize) },
   })
 }

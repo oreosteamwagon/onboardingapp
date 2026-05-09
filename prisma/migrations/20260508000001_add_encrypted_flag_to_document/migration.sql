@@ -1,0 +1,1 @@
+ALTER TABLE "Document" ADD COLUMN "encrypted" BOOLEAN NOT NULL DEFAULT false;

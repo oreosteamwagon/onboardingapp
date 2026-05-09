@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { redirect } from 'next/navigation'
-import { canApprove, canApproveAny, canManageAttachments } from '@/lib/permissions'
+import { canApprove, canApproveAny, canManageAttachments, isAdmin } from '@/lib/permissions'
 import type { Role } from '@prisma/client'
 import ChecklistView from './ChecklistView'
 
@@ -80,6 +80,8 @@ export default async function OnboardingPage({ params }: PageProps) {
   })
 
   const viewerCanManageAttachments = canManageAttachments(viewerRole)
+  const viewerCanManageSupervisorTasks = !isOwnPage && canApprove(viewerRole)
+  const viewerIsAdmin = isAdmin(viewerRole)
 
   // Fetch course attempts for this user to show progress on LEARNING tasks
   const courseAttempts = await prisma.courseAttempt.findMany({
@@ -136,6 +138,13 @@ export default async function OnboardingPage({ params }: PageProps) {
   })
 
   const userTaskMap = new Map(userTaskRecords.map((ut) => [ut.taskId, ut]))
+
+  // Compute whether all tasks across all workflows are approved
+  const allTaskIds = Array.from(
+    new Set(userWorkflows.flatMap((uw) => uw.workflow.tasks.map((wt) => wt.task.id))),
+  )
+  const approvedCount = userTaskRecords.filter((ut) => ut.approvalStatus === 'APPROVED').length
+  const isFullyApproved = allTaskIds.length > 0 && approvedCount === allTaskIds.length
 
   // Build the grouped structure: one list of tasks per workflow assignment
   const workflows = userWorkflows.map((uw) => ({
@@ -202,6 +211,10 @@ export default async function OnboardingPage({ params }: PageProps) {
           userId={viewingUserId}
           isOwnPage={isOwnPage}
           viewerCanManageAttachments={viewerCanManageAttachments}
+          viewerCanManageSupervisorTasks={viewerCanManageSupervisorTasks}
+          viewerIsAdmin={viewerIsAdmin}
+          isFullyApproved={isFullyApproved}
+          targetUsername={targetUser.username}
         />
       )}
     </div>

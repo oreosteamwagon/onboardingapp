@@ -19,11 +19,24 @@ interface Category {
   name: string
 }
 
+interface TaskUploadFile {
+  id: string
+  filename: string
+  uploadedAt: string
+}
+
+interface TaskUploadGroup {
+  uploaderName: string
+  files: TaskUploadFile[]
+}
+
 interface ResourcesViewProps {
   resources: Resource[]
   canUpload: boolean
   canDelete: boolean
   categories: Category[]
+  taskUploadGroups: TaskUploadGroup[]
+  canViewTaskUploads: boolean
 }
 
 export default function ResourcesView({
@@ -31,6 +44,8 @@ export default function ResourcesView({
   canUpload,
   canDelete,
   categories,
+  taskUploadGroups,
+  canViewTaskUploads,
 }: ResourcesViewProps) {
   const router = useRouter()
   const [resources, setResources] = useState(initial)
@@ -323,6 +338,51 @@ export default function ResourcesView({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {canViewTaskUploads && (
+        <div className="mt-10">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Task Submissions</h2>
+          {taskUploadGroups.length === 0 ? (
+            <p className="text-gray-500 text-sm">No task submissions yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {taskUploadGroups.map((group) => (
+                <details key={group.uploaderName} className="bg-white rounded-lg shadow">
+                  <summary className="px-6 py-4 cursor-pointer select-none flex items-center gap-3 text-sm font-medium text-gray-900 hover:bg-gray-50 rounded-lg">
+                    <span className="text-gray-400 text-xs">[+]</span>
+                    {group.uploaderName}
+                    <span className="ml-auto text-xs font-normal text-gray-500">
+                      {group.files.length} {group.files.length === 1 ? 'file' : 'files'}
+                    </span>
+                  </summary>
+                  <div className="border-t border-gray-100">
+                    <table className="min-w-full divide-y divide-gray-100">
+                      <tbody className="divide-y divide-gray-100">
+                        {group.files.map((f) => (
+                          <tr key={f.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-3 text-sm text-gray-800">{f.filename}</td>
+                            <td className="px-6 py-3 text-sm text-gray-500 whitespace-nowrap">
+                              {new Date(f.uploadedAt).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-3 text-sm text-right whitespace-nowrap">
+                              <a
+                                href={`/api/documents/${f.id}/download`}
+                                className="text-indigo-600 hover:underline text-xs font-medium"
+                              >
+                                Download
+                              </a>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

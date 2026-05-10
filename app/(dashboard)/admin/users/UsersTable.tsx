@@ -56,6 +56,11 @@ export default function UsersTable({ users: initial, supervisors }: UsersTablePr
   const [resetError, setResetError] = useState<string | null>(null)
   const [resetLoading, setResetLoading] = useState(false)
 
+  // Delete user state
+  const [deleteUserId, setDeleteUserId] = useState<string | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   // Edit profile state
   const [editProfileUserId, setEditProfileUserId] = useState<string | null>(null)
   const [profileForm, setProfileForm] = useState<ProfileForm>({
@@ -193,6 +198,27 @@ export default function UsersTable({ users: initial, supervisors }: UsersTablePr
     }
   }
 
+  async function handleDelete(userId: string) {
+    setDeleteError(null)
+    setDeleteLoading(true)
+    try {
+      const res = await fetch(`/api/users/${encodeURIComponent(userId)}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) {
+        setDeleteError(data.error ?? 'Failed to delete user')
+        setDeleteUserId(null)
+        return
+      }
+      setUsers((prev) => prev.filter((u) => u.id !== userId))
+      setDeleteUserId(null)
+    } catch {
+      setDeleteError('Unexpected error deleting user.')
+      setDeleteUserId(null)
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
   function openEditProfile(u: User) {
     setProfileErrors([])
     setProfileForm({
@@ -282,6 +308,18 @@ export default function UsersTable({ users: initial, supervisors }: UsersTablePr
           {resetError}
           <button
             onClick={() => setResetError(null)}
+            className="ml-4 text-red-600 underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {deleteError && (
+        <div role="alert" className="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          {deleteError}
+          <button
+            onClick={() => setDeleteError(null)}
             className="ml-4 text-red-600 underline"
           >
             Dismiss
@@ -558,6 +596,32 @@ export default function UsersTable({ users: initial, supervisors }: UsersTablePr
                       >
                         {editProfileUserId === u.id ? 'Close' : 'Edit Profile'}
                       </button>
+                      {!u.active && deleteUserId !== u.id && (
+                        <button
+                          onClick={() => { setDeleteUserId(u.id); setDeleteError(null) }}
+                          className="text-red-600 hover:underline"
+                        >
+                          Delete
+                        </button>
+                      )}
+                      {!u.active && deleteUserId === u.id && (
+                        <span className="inline-flex items-center gap-2 text-red-700">
+                          <span>Permanently delete?</span>
+                          <button
+                            onClick={() => handleDelete(u.id)}
+                            disabled={deleteLoading}
+                            className="font-medium underline disabled:opacity-50"
+                          >
+                            {deleteLoading ? 'Deleting...' : 'Yes'}
+                          </button>
+                          <button
+                            onClick={() => setDeleteUserId(null)}
+                            className="underline text-gray-500"
+                          >
+                            Cancel
+                          </button>
+                        </span>
+                      )}
                     </div>
                   </td>
                 </tr>

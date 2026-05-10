@@ -27,6 +27,64 @@ export async function isUserFullyApproved(userId: string): Promise<boolean> {
   return approvedCount === allTaskIds.length
 }
 
+export async function deleteUserData(userId: string, triggeredById: string): Promise<void> {
+  // Collect file paths before deletion (can't query after the transaction)
+  const documents = await prisma.document.findMany({
+    where: { uploadedBy: userId, storagePath: { not: null } },
+    select: { storagePath: true },
+  })
+
+  const userTaskIds = await prisma.userTask
+    .findMany({ where: { userId }, select: { id: true } })
+    .then((rows) => rows.map((r) => r.id))
+
+  const attachments = userTaskIds.length
+    ? await prisma.taskAttachment.findMany({
+        where: { userTaskId: { in: userTaskIds } },
+        select: { storagePath: true },
+      })
+    : []
+
+  const filesToDelete = [
+    ...documents.map((d) => d.storagePath as string),
+    ...attachments.map((a) => a.storagePath),
+  ]
+
+  // Delete all user data in dependency order
+  await prisma.$transaction(async (tx) => {
+    if (userTaskIds.length) {
+      await tx.taskAttachment.deleteMany({ where: { userTaskId: { in: userTaskIds } } })
+    }
+    await tx.userTask.deleteMany({ where: { userId } })
+    await tx.document.deleteMany({ where: { uploadedBy: userId } })
+    await tx.courseAttempt.deleteMany({ where: { userId } })
+    await tx.userWorkflow.deleteMany({ where: { userId } })
+    await tx.user.delete({ where: { id: userId } })
+  })
+
+  log({
+    message: 'user data deleted',
+    action: 'user_delete',
+    userId: triggeredById,
+    statusCode: 200,
+    meta: { deletedUserId: userId, fileCount: filesToDelete.length },
+  })
+
+  // Delete files from disk after DB commit (orphaned files acceptable, DB integrity is not)
+  for (const storagePath of filesToDelete) {
+    try {
+      await unlink(join(UPLOAD_DIR, storagePath))
+    } catch (err) {
+      logError({
+        message: 'Failed to delete file during user deletion',
+        action: 'user_delete',
+        userId: triggeredById,
+        meta: { storagePath, error: String(err) },
+      })
+    }
+  }
+}
+
 export async function offboardUser(userId: string, triggeredById: string): Promise<void> {
   // 1. Fetch user info before deletion
   const user = await prisma.user.findUnique({
@@ -75,29 +133,7 @@ export async function offboardUser(userId: string, triggeredById: string): Promi
   // Remove supervisor emails from staff list to avoid duplicates
   const staffToNotify = staffUsers.filter((s) => !supervisorEmailSet.has(s.email))
 
-  // 4. Collect file paths before deletion
-  const documents = await prisma.document.findMany({
-    where: { uploadedBy: userId, storagePath: { not: null } },
-    select: { storagePath: true },
-  })
-
-  const userTaskIds = await prisma.userTask
-    .findMany({ where: { userId }, select: { id: true } })
-    .then((rows) => rows.map((r) => r.id))
-
-  const attachments = userTaskIds.length
-    ? await prisma.taskAttachment.findMany({
-        where: { userTaskId: { in: userTaskIds } },
-        select: { storagePath: true },
-      })
-    : []
-
-  const filesToDelete = [
-    ...documents.map((d) => d.storagePath as string),
-    ...attachments.map((a) => a.storagePath),
-  ]
-
-  // 5. Send emails before deletion so we still have the user's address
+  // 4. Send emails before deletion so we still have the user's address
   await notifyOnboardingComplete({
     userName,
     userEmail: user.email,
@@ -105,39 +141,8 @@ export async function offboardUser(userId: string, triggeredById: string): Promi
     staffUsers: staffToNotify,
   })
 
-  // 6. Delete all user data in dependency order
-  await prisma.$transaction(async (tx) => {
-    if (userTaskIds.length) {
-      await tx.taskAttachment.deleteMany({ where: { userTaskId: { in: userTaskIds } } })
-    }
-    await tx.userTask.deleteMany({ where: { userId } })
-    await tx.document.deleteMany({ where: { uploadedBy: userId } })
-    await tx.courseAttempt.deleteMany({ where: { userId } })
-    await tx.userWorkflow.deleteMany({ where: { userId } })
-    await tx.user.delete({ where: { id: userId } })
-  })
-
-  log({
-    message: 'user offboarded',
-    action: 'offboard',
-    userId: triggeredById,
-    statusCode: 200,
-    meta: { offboardedUserId: userId, fileCount: filesToDelete.length },
-  })
-
-  // 7. Delete files from disk after DB commit (orphaned files acceptable, DB integrity is not)
-  for (const storagePath of filesToDelete) {
-    try {
-      await unlink(join(UPLOAD_DIR, storagePath))
-    } catch (err) {
-      logError({
-        message: 'Failed to delete file during offboard',
-        action: 'offboard',
-        userId: triggeredById,
-        meta: { storagePath, error: String(err) },
-      })
-    }
-  }
+  // 5. Delete all data and files
+  await deleteUserData(userId, triggeredById)
 }
 
 export async function checkAndOffboardUser(userId: string): Promise<void> {

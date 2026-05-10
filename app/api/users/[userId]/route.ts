@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canManageUsers, roleRank } from '@/lib/permissions'
-import { checkUserProfileUpdateRateLimit } from '@/lib/ratelimit'
+import { checkUserProfileUpdateRateLimit, checkUserDeleteRateLimit } from '@/lib/ratelimit'
 import { logError, log } from '@/lib/logger'
 import { verifyActiveSession } from '@/lib/session'
 import { validateName, validateDepartment, validatePositionCode, validateCuid } from '@/lib/validation'
+import { deleteUserData } from '@/lib/offboard'
 import type { Role } from '@prisma/client'
 
 const VALID_ROLES: Role[] = ['USER', 'PAYROLL', 'HR', 'SUPERVISOR', 'ADMIN']
@@ -189,6 +190,63 @@ export async function PATCH(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
     logError({ message: 'Update user error', action: 'user_update', userId: session.user.id, meta: { error: String(err) } })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { userId: string } },
+) {
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!canManageUsers(session.user.role as Role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (!await verifyActiveSession(session.user.id)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const { userId } = params
+
+  const cuidError = validateCuid(userId, 'userId')
+  if (cuidError) {
+    return NextResponse.json({ error: cuidError }, { status: 400 })
+  }
+
+  if (userId === session.user.id) {
+    return NextResponse.json({ error: 'Cannot delete your own account' }, { status: 400 })
+  }
+
+  try {
+    await checkUserDeleteRateLimit(session.user.id)
+  } catch {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '3600' } })
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, active: true, username: true },
+  })
+
+  if (!user) {
+    return NextResponse.json({ error: 'User not found' }, { status: 404 })
+  }
+
+  if (user.active) {
+    return NextResponse.json({ error: 'User must be deactivated before deletion' }, { status: 409 })
+  }
+
+  try {
+    await deleteUserData(userId, session.user.id)
+    log({ message: 'user deleted by admin', action: 'user_delete', userId: session.user.id, statusCode: 200, meta: { deletedUserId: userId, username: user.username } })
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    logError({ message: 'User delete error', action: 'user_delete', userId: session.user.id, meta: { error: String(err), targetUserId: userId } })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

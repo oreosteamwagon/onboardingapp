@@ -236,6 +236,12 @@ export async function checkOffboardRateLimit(userId: string): Promise<void> {
   await offboardLimiter.consume(userId)
 }
 
+// 10 user deletions per hour per admin — destructive and irreversible, low expected frequency
+const userDeleteLimiter = makeLimiter({ keyPrefix: 'rl:user-delete', points: 10, duration: 3600, blockDuration: 3600 })
+export async function checkUserDeleteRateLimit(userId: string): Promise<void> {
+  await userDeleteLimiter.consume(userId)
+}
+
 // 10 app-settings changes per minute per admin
 const appSettingsLimiter = makeLimiter({ keyPrefix: 'rl:app-settings', points: 10, duration: 60, blockDuration: 60 })
 export async function checkAppSettingsRateLimit(userId: string): Promise<void> {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canUploadDocuments, canViewAllDocuments } from '@/lib/permissions'
-import { saveUpload, UploadError } from '@/lib/upload'
+import { saveEncryptedUpload, UploadError } from '@/lib/upload'
 import { checkUploadRateLimit } from '@/lib/ratelimit'
 import { verifyActiveSession } from '@/lib/session'
 import { logError, log } from '@/lib/logger'
@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
   let filename: string
 
   try {
-    const result = await saveUpload(buffer, file.name)
+    const result = await saveEncryptedUpload(buffer, file.name)
     storagePath = result.storagePath
     filename = result.filename
   } catch (err) {
@@ -179,6 +179,7 @@ export async function POST(req: NextRequest) {
       storagePath,
       category: categoryStr,
       isResource: true,
+      encrypted: true,
     },
     include: {
       uploader: { select: { username: true } },

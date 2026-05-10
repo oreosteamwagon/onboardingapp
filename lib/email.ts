@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer'
 import { prisma } from '@/lib/db'
+import { redisClient } from '@/lib/redis'
 import { decryptSmtpPassword, decryptEntraClientSecret } from '@/lib/encrypt'
 import { logError } from '@/lib/logger'
 
@@ -37,29 +38,67 @@ interface UserRef {
 }
 
 // ---------------------------------------------------------------------------
-// Entra ID token cache (module-level, server-side only)
+// Entra ID token cache — Redis-backed with in-memory fallback
 // ---------------------------------------------------------------------------
 //
-// Security note (MED-07): this live Microsoft Graph access token is held in
-// process memory for up to ~55 minutes (token lifetime minus the 60-second
-// refresh buffer in getEntraAccessToken). A process memory dump or heap
-// inspection attack could expose the token, which grants the ability to send
-// email as the configured sender for its remaining lifetime.
-//
-// This is accepted risk for the current single-instance deployment given the
-// short window and the difficulty of heap inspection in practice. Before
-// moving to a multi-instance deployment, move this cache to Redis with an
-// appropriate TTL so the token is not replicated across processes.
-let entraTokenCache: { accessToken: string; expiresAt: number } | null = null
+// The token is stored in Redis (out-of-process) so it is not exposed by a
+// Node.js heap dump and is safely shared across multiple instances. When Redis
+// is unavailable the module falls back to an in-memory cache; the original
+// heap-exposure risk applies only in that degraded mode.
+
+const ENTRA_TOKEN_KEY = 'entra:token_cache'
+
+// In-memory fallback used only when Redis is not configured
+let entraMemCache: { accessToken: string; expiresAt: number } | null = null
 
 export function invalidateEntraTokenCache(): void {
-  entraTokenCache = null
+  entraMemCache = null
+  if (redisClient) {
+    void redisClient.del(ENTRA_TOKEN_KEY)
+  }
+}
+
+async function getCachedEntraToken(): Promise<string | null> {
+  if (redisClient) {
+    let raw: string | null
+    try {
+      raw = await redisClient.get(ENTRA_TOKEN_KEY)
+    } catch {
+      return null
+    }
+    if (!raw) return null
+    try {
+      const cached = JSON.parse(raw) as { accessToken: string; expiresAt: number }
+      if (cached.expiresAt > Date.now() + 60_000) return cached.accessToken
+    } catch {
+      return null
+    }
+    return null
+  }
+  if (entraMemCache && entraMemCache.expiresAt > Date.now() + 60_000) {
+    return entraMemCache.accessToken
+  }
+  return null
+}
+
+async function setCachedEntraToken(accessToken: string, expiresIn: number): Promise<void> {
+  const expiresAt = Date.now() + expiresIn * 1000
+  if (redisClient) {
+    const ttl = Math.max(1, expiresIn - 60)
+    try {
+      await redisClient.set(ENTRA_TOKEN_KEY, JSON.stringify({ accessToken, expiresAt }), 'EX', ttl)
+    } catch {
+      // Fall through to memory cache on Redis write failure
+      entraMemCache = { accessToken, expiresAt }
+    }
+    return
+  }
+  entraMemCache = { accessToken, expiresAt }
 }
 
 async function getEntraAccessToken(settings: EntraSettings): Promise<string> {
-  if (entraTokenCache && entraTokenCache.expiresAt > Date.now() + 60_000) {
-    return entraTokenCache.accessToken
-  }
+  const cached = await getCachedEntraToken()
+  if (cached) return cached
 
   let clientSecret: string
   try {
@@ -91,11 +130,8 @@ async function getEntraAccessToken(settings: EntraSettings): Promise<string> {
   }
 
   const json = await res.json() as { access_token: string; expires_in: number }
-  entraTokenCache = {
-    accessToken: json.access_token,
-    expiresAt: Date.now() + json.expires_in * 1000,
-  }
-  return entraTokenCache.accessToken
+  await setCachedEntraToken(json.access_token, json.expires_in)
+  return json.access_token
 }
 
 // ---------------------------------------------------------------------------

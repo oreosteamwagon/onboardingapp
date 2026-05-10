@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
+import DOMPurify from 'dompurify'
 
 interface CourseAnswer {
   id: string
@@ -51,6 +52,12 @@ export default function CourseTaker({ course, attempts: initialAttempts, taskId 
     passingScore: number
     attemptNumber: number
   } | null>(null)
+
+  // Client-side sanitization pass — defense in depth against sanitize-html bypasses on write
+  const sanitizedHtml = useMemo(() => {
+    if (typeof window === 'undefined') return course.contentHtml
+    return DOMPurify.sanitize(course.contentHtml, { USE_PROFILES: { html: true } })
+  }, [course.contentHtml])
 
   const bestScore = attempts.length > 0 ? Math.max(...attempts.map((a) => a.score)) : null
   const latestPassedAttempt = attempts.filter((a) => a.passed).at(-1)
@@ -129,7 +136,7 @@ export default function CourseTaker({ course, attempts: initialAttempts, taskId 
 
       <div
         className="prose prose-sm max-w-none bg-white rounded-lg shadow px-6 py-5"
-        dangerouslySetInnerHTML={{ __html: course.contentHtml }}
+        dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
       />
 
       {result ? (

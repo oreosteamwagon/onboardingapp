@@ -45,6 +45,7 @@ export default function WorkflowManager({ workflows: initial, availableTasks }: 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
 
   function clearMessages() {
     setError(null)
@@ -176,6 +177,41 @@ export default function WorkflowManager({ workflows: initial, availableTasks }: 
       setError('Unexpected error adding task.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleDuplicate(workflowId: string) {
+    clearMessages()
+    setDuplicatingId(workflowId)
+    try {
+      const res = await fetch(`/api/workflows/${workflowId}/duplicate`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'Failed to duplicate workflow')
+        return
+      }
+      const added: Workflow = {
+        id: data.id,
+        name: data.name,
+        description: data.description,
+        enrolledCount: 0,
+        tasks: (data.tasks ?? []).map((wt: { id: string; taskId: string; task: { title: string; taskType: TaskType }; order: number }) => ({
+          workflowTaskId: wt.id,
+          taskId: wt.taskId,
+          title: wt.task.title,
+          taskType: wt.task.taskType,
+          order: wt.order,
+        })),
+      }
+      setWorkflows((prev) =>
+        [...prev, added].sort((a, b) => a.name.localeCompare(b.name)),
+      )
+      setSuccess(`Workflow duplicated as "${data.name}".`)
+      router.refresh()
+    } catch {
+      setError('Unexpected error duplicating workflow.')
+    } finally {
+      setDuplicatingId(null)
     }
   }
 
@@ -366,6 +402,13 @@ export default function WorkflowManager({ workflows: initial, availableTasks }: 
                           className="text-sm text-primary hover:underline"
                         >
                           Edit
+                        </button>
+                        <button
+                          onClick={() => handleDuplicate(workflow.id)}
+                          disabled={loading || duplicatingId === workflow.id}
+                          className="text-sm text-gray-600 hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {duplicatingId === workflow.id ? 'Duplicating...' : 'Duplicate'}
                         </button>
                         <button
                           onClick={() => handleDelete(workflow.id, workflow.name)}

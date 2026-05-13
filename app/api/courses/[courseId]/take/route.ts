@@ -10,7 +10,7 @@ import { checkAndOffboardUser } from '@/lib/offboard'
 import type { Role } from '@prisma/client'
 
 interface RouteContext {
-  params: { courseId: string }
+  params: Promise<{ courseId: string }>
 }
 
 // GET /api/courses/[courseId]/take -- fetch course for taking (any authenticated user)
@@ -30,7 +30,9 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
-  const cuidErr = validateCuid(params.courseId, 'courseId')
+  const { courseId } = await params
+
+  const cuidErr = validateCuid(courseId, 'courseId')
   if (cuidErr) return NextResponse.json({ error: cuidErr }, { status: 400 })
 
   // Verify workflow membership: a LEARNING task with this courseId must be in a workflow assigned to user
@@ -38,7 +40,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     where: {
       task: {
         taskType: 'LEARNING',
-        courseId: params.courseId,
+        courseId: courseId,
       },
       workflow: {
         userWorkflows: {
@@ -54,7 +56,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   }
 
   const course = await prisma.course.findUnique({
-    where: { id: params.courseId },
+    where: { id: courseId },
     select: {
       id: true,
       title: true,
@@ -84,7 +86,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 })
 
   const attempts = await prisma.courseAttempt.findMany({
-    where: { userId: session.user.id, courseId: params.courseId },
+    where: { userId: session.user.id, courseId: courseId },
     select: { id: true, score: true, passed: true, attemptNumber: true, completedAt: true },
     orderBy: { attemptNumber: 'asc' },
   })
@@ -113,7 +115,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
-  const cuidErr = validateCuid(params.courseId, 'courseId')
+  const { courseId } = await params
+
+  const cuidErr = validateCuid(courseId, 'courseId')
   if (cuidErr) return NextResponse.json({ error: cuidErr }, { status: 400 })
 
   let body: unknown
@@ -147,7 +151,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   if (task.taskType !== 'LEARNING') {
     return NextResponse.json({ error: 'Task is not a LEARNING task' }, { status: 409 })
   }
-  if (task.courseId !== params.courseId) {
+  if (task.courseId !== courseId) {
     return NextResponse.json({ error: 'taskId is not linked to this course' }, { status: 409 })
   }
 
@@ -169,7 +173,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   // Fetch all questions + correct answers for this course (server-side scoring)
   const courseQuestions = await prisma.courseQuestion.findMany({
-    where: { courseId: params.courseId },
+    where: { courseId: courseId },
     select: {
       id: true,
       answers: { select: { id: true, isCorrect: true } },
@@ -216,7 +220,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   // Fetch course for passing score
   const course = await prisma.course.findUnique({
-    where: { id: params.courseId },
+    where: { id: courseId },
     select: { passingScore: true },
   })
 
@@ -226,12 +230,12 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   const result = await prisma.$transaction(async (tx) => {
     const attemptNumber =
-      (await tx.courseAttempt.count({ where: { userId: session.user.id, courseId: params.courseId } })) + 1
+      (await tx.courseAttempt.count({ where: { userId: session.user.id, courseId: courseId } })) + 1
 
     const attempt = await tx.courseAttempt.create({
       data: {
         userId: session.user.id,
-        courseId: params.courseId,
+        courseId: courseId,
         taskId: taskId as string,
         score,
         passed,

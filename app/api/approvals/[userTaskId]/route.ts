@@ -10,7 +10,7 @@ import { checkAndNotifyWorkflowCompletion } from '@/lib/email'
 import { checkAndOffboardUser } from '@/lib/offboard'
 
 interface RouteContext {
-  params: { userTaskId: string }
+  params: Promise<{ userTaskId: string }>
 }
 
 // POST /api/approvals/[userTaskId] — approve or reject a completed task
@@ -39,8 +39,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   // Fetch the task to be approved
+  const { userTaskId } = await params
+
   const userTask = await prisma.userTask.findUnique({
-    where: { id: params.userTaskId },
+    where: { id: userTaskId },
     select: {
       id: true,
       userId: true,
@@ -111,7 +113,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   try {
     updated = await prisma.$transaction(async (tx) => {
       const current = await tx.userTask.findUnique({
-        where: { id: params.userTaskId },
+        where: { id: userTaskId },
         select: { approvalStatus: true },
       })
 
@@ -120,7 +122,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       }
 
       return tx.userTask.update({
-        where: { id: params.userTaskId },
+        where: { id: userTaskId },
         data: {
           approvalStatus: action as ApprovalStatus,
           approvedAt: new Date(),

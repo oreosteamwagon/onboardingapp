@@ -10,7 +10,7 @@ import { randomBytes } from 'crypto'
 import type { Role } from '@prisma/client'
 
 interface RouteContext {
-  params: { userId: string }
+  params: Promise<{ userId: string }>
 }
 
 // POST /api/users/[userId]/reset-password
@@ -37,13 +37,15 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
-  const idError = validateCuid(params.userId, 'userId')
+  const { userId } = await params
+
+  const idError = validateCuid(userId, 'userId')
   if (idError) {
     return NextResponse.json({ error: idError }, { status: 400 })
   }
 
   const targetUser = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { id: userId },
     select: { id: true, active: true },
   })
 
@@ -69,7 +71,7 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
   })
 
   await prisma.user.update({
-    where: { id: params.userId },
+    where: { id: userId },
     data: { passwordHash },
   })
 

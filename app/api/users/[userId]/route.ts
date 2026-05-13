@@ -37,7 +37,7 @@ const USER_SELECT = {
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { userId: string } },
+  { params }: { params: Promise<{ userId: string }> },
 ) {
   const session = await auth()
   if (!session?.user) {
@@ -52,7 +52,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { userId } = params
+  const { userId } = await params
 
   let body: unknown
   try {
@@ -196,7 +196,7 @@ export async function PATCH(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { userId: string } },
+  { params }: { params: Promise<{ userId: string }> },
 ) {
   const session = await auth()
   if (!session?.user) {
@@ -211,7 +211,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { userId } = params
+  const { userId } = await params
 
   const cuidError = validateCuid(userId, 'userId')
   if (cuidError) {

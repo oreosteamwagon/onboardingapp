@@ -22,7 +22,7 @@ const EXT_TO_MIME: Record<string, string> = {
 }
 
 interface RouteContext {
-  params: { attachmentId: string }
+  params: Promise<{ attachmentId: string }>
 }
 
 // GET /api/attachments/[attachmentId]/download
@@ -38,7 +38,9 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const idError = validateCuid(params.attachmentId, 'attachmentId')
+  const { attachmentId } = await params
+
+  const idError = validateCuid(attachmentId, 'attachmentId')
   if (idError) {
     return NextResponse.json({ error: idError }, { status: 400 })
   }
@@ -50,7 +52,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   }
 
   const attachment = await prisma.taskAttachment.findUnique({
-    where: { id: params.attachmentId },
+    where: { id: attachmentId },
     select: {
       filename: true,
       storagePath: true,
@@ -75,7 +77,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     attachment.storagePath.includes('\\') ||
     attachment.storagePath.includes('..')
   ) {
-    logError({ message: 'Suspicious storagePath on attachment', action: 'attachment_download', userId: session.user.id, meta: { attachmentId: params.attachmentId } })
+    logError({ message: 'Suspicious storagePath on attachment', action: 'attachment_download', userId: session.user.id, meta: { attachmentId: attachmentId } })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
@@ -90,7 +92,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     if (code === 'ENOENT') {
       return NextResponse.json({ error: 'File not found' }, { status: 404 })
     }
-    logError({ message: 'Attachment file read error', action: 'attachment_download', userId: session.user.id, meta: { attachmentId: params.attachmentId, error: String(err) } })
+    logError({ message: 'Attachment file read error', action: 'attachment_download', userId: session.user.id, meta: { attachmentId: attachmentId, error: String(err) } })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 

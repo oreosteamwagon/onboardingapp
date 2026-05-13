@@ -9,7 +9,7 @@ import { log } from '@/lib/logger'
 import type { Role } from '@prisma/client'
 
 interface RouteContext {
-  params: { workflowId: string }
+  params: Promise<{ workflowId: string }>
 }
 
 // GET /api/workflows/[workflowId] — fetch workflow with its tasks (HR+ only)
@@ -27,8 +27,10 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const { workflowId } = await params
+
   const workflow = await prisma.workflow.findUnique({
-    where: { id: params.workflowId },
+    where: { id: workflowId },
     include: {
       tasks: {
         include: { task: true },
@@ -65,7 +67,9 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
-  const existing = await prisma.workflow.findUnique({ where: { id: params.workflowId } })
+  const { workflowId } = await params
+
+  const existing = await prisma.workflow.findUnique({ where: { id: workflowId } })
   if (!existing) {
     return NextResponse.json({ error: 'Workflow not found' }, { status: 404 })
   }
@@ -92,7 +96,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     if (err) return NextResponse.json({ error: err }, { status: 400 })
 
     const dupe = await prisma.workflow.findFirst({
-      where: { name: (name as string).trim(), id: { not: params.workflowId } },
+      where: { name: (name as string).trim(), id: { not: workflowId } },
     })
     if (dupe) {
       return NextResponse.json({ error: 'A workflow with this name already exists' }, { status: 409 })
@@ -105,7 +109,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
   }
 
   const workflow = await prisma.workflow.update({
-    where: { id: params.workflowId },
+    where: { id: workflowId },
     data: {
       ...(name !== undefined && { name: (name as string).trim() }),
       ...(description !== undefined && {
@@ -140,8 +144,10 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
+  const { workflowId } = await params
+
   const existing = await prisma.workflow.findUnique({
-    where: { id: params.workflowId },
+    where: { id: workflowId },
     select: { id: true, _count: { select: { userWorkflows: true } } },
   })
 
@@ -158,10 +164,10 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
 
   // Remove all WorkflowTask memberships first, then delete the workflow
   await prisma.$transaction([
-    prisma.workflowTask.deleteMany({ where: { workflowId: params.workflowId } }),
-    prisma.workflow.delete({ where: { id: params.workflowId } }),
+    prisma.workflowTask.deleteMany({ where: { workflowId: workflowId } }),
+    prisma.workflow.delete({ where: { id: workflowId } }),
   ])
 
-  log({ message: 'workflow deleted', action: 'workflow_delete', userId: session.user.id, statusCode: 200, meta: { workflowId: params.workflowId } })
+  log({ message: 'workflow deleted', action: 'workflow_delete', userId: session.user.id, statusCode: 200, meta: { workflowId: workflowId } })
   return NextResponse.json({ deleted: true })
 }

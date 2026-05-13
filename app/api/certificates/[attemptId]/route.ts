@@ -8,7 +8,7 @@ import { verifyActiveSession } from '@/lib/session'
 import type { Role } from '@prisma/client'
 
 interface RouteContext {
-  params: { attemptId: string }
+  params: Promise<{ attemptId: string }>
 }
 
 // GET /api/certificates/[attemptId] -- certificate data
@@ -28,11 +28,13 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
-  const cuidErr = validateCuid(params.attemptId, 'attemptId')
+  const { attemptId } = await params
+
+  const cuidErr = validateCuid(attemptId, 'attemptId')
   if (cuidErr) return NextResponse.json({ error: cuidErr }, { status: 400 })
 
   const attempt = await prisma.courseAttempt.findUnique({
-    where: { id: params.attemptId },
+    where: { id: attemptId },
     select: {
       id: true,
       userId: true,

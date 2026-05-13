@@ -13,7 +13,7 @@ import type { Role } from '@prisma/client'
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? '/app/uploads'
 
 interface RouteContext {
-  params: { documentId: string }
+  params: Promise<{ documentId: string }>
 }
 
 // DELETE /api/documents/[documentId]
@@ -39,13 +39,15 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
-  const idError = validateCuid(params.documentId, 'documentId')
+  const { documentId } = await params
+
+  const idError = validateCuid(documentId, 'documentId')
   if (idError) {
     return NextResponse.json({ error: idError }, { status: 400 })
   }
 
   const document = await prisma.document.findUnique({
-    where: { id: params.documentId },
+    where: { id: documentId },
     select: { id: true, storagePath: true, filename: true },
   })
 

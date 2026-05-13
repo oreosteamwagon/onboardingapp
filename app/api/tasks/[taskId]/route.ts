@@ -15,7 +15,7 @@ import { verifyActiveSession } from '@/lib/session'
 import type { Role, TaskType } from '@prisma/client'
 
 interface RouteContext {
-  params: { taskId: string }
+  params: Promise<{ taskId: string }>
 }
 
 // GET /api/tasks/[taskId] — fetch a single task definition (HR+ only)
@@ -33,7 +33,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { taskId } = params
+  const { taskId } = await params
   const taskIdErr = validateCuid(taskId, 'taskId')
   if (taskIdErr) return NextResponse.json({ error: taskIdErr }, { status: 400 })
 
@@ -73,7 +73,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
-  const { taskId } = params
+  const { taskId } = await params
   const taskIdErr = validateCuid(taskId, 'taskId')
   if (taskIdErr) return NextResponse.json({ error: taskIdErr }, { status: 400 })
 
@@ -209,7 +209,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
-  const { taskId } = params
+  const { taskId } = await params
   const taskIdErr = validateCuid(taskId, 'taskId')
   if (taskIdErr) return NextResponse.json({ error: taskIdErr }, { status: 400 })
 

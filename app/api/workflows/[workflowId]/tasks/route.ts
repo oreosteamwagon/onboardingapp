@@ -9,7 +9,7 @@ import type { Role } from '@prisma/client'
 import { notifyTaskAddedToWorkflow } from '@/lib/email'
 
 interface RouteContext {
-  params: { workflowId: string }
+  params: Promise<{ workflowId: string }>
 }
 
 // POST /api/workflows/[workflowId]/tasks — add a task to this workflow (HR+ only)
@@ -33,7 +33,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
-  const workflow = await prisma.workflow.findUnique({ where: { id: params.workflowId } })
+  const { workflowId } = await params
+
+  const workflow = await prisma.workflow.findUnique({ where: { id: workflowId } })
   if (!workflow) {
     return NextResponse.json({ error: 'Workflow not found' }, { status: 404 })
   }
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   const existing = await prisma.workflowTask.findUnique({
-    where: { workflowId_taskId: { workflowId: params.workflowId, taskId } },
+    where: { workflowId_taskId: { workflowId: workflowId, taskId } },
   })
   if (existing) {
     return NextResponse.json({ error: 'Task already belongs to this workflow' }, { status: 409 })
@@ -69,14 +71,14 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   const workflowTask = await prisma.workflowTask.create({
     data: {
-      workflowId: params.workflowId,
+      workflowId: workflowId,
       taskId,
       order: validateOrder(order),
     },
     include: { task: true },
   })
 
-  void notifyTaskAddedToWorkflow(params.workflowId, taskId)
+  void notifyTaskAddedToWorkflow(workflowId, taskId)
   return NextResponse.json(workflowTask, { status: 201 })
 }
 
@@ -119,8 +121,10 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'taskId is required' }, { status: 400 })
   }
 
+  const { workflowId } = await params
+
   const wfTask = await prisma.workflowTask.findUnique({
-    where: { workflowId_taskId: { workflowId: params.workflowId, taskId } },
+    where: { workflowId_taskId: { workflowId, taskId } },
   })
   if (!wfTask) {
     return NextResponse.json({ error: 'Task not found in this workflow' }, { status: 404 })
@@ -128,7 +132,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
 
   // Block removal if any enrolled user has a completion record for this task
   const enrolledUserIds = await prisma.userWorkflow.findMany({
-    where: { workflowId: params.workflowId },
+    where: { workflowId: workflowId },
     select: { userId: true },
   })
 
@@ -148,7 +152,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
   }
 
   await prisma.workflowTask.delete({
-    where: { workflowId_taskId: { workflowId: params.workflowId, taskId } },
+    where: { workflowId_taskId: { workflowId: workflowId, taskId } },
   })
 
   return NextResponse.json({ deleted: true })

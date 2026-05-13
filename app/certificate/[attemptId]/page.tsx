@@ -7,15 +7,17 @@ import type { Role } from '@prisma/client'
 import PrintButton from './PrintButton'
 
 interface PageProps {
-  params: { attemptId: string }
+  params: Promise<{ attemptId: string }>
 }
 
 export default async function CertificatePage({ params }: PageProps) {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
+  const { attemptId } = await params
+
   const attempt = await prisma.courseAttempt.findUnique({
-    where: { id: params.attemptId },
+    where: { id: attemptId },
     select: {
       id: true,
       userId: true,

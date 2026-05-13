@@ -5,14 +5,14 @@ import { sanitizeCourseHtml } from '@/lib/sanitize'
 import CourseTaker from './CourseTaker'
 
 interface PageProps {
-  params: { courseId: string }
+  params: Promise<{ courseId: string }>
 }
 
 export default async function LearnPage({ params }: PageProps) {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
-  const { courseId } = params
+  const { courseId } = await params
 
   // Verify workflow membership
   const membership = await prisma.workflowTask.findFirst({

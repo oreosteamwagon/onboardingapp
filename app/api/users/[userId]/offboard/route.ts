@@ -9,7 +9,7 @@ import { prisma } from '@/lib/db'
 import type { Role } from '@prisma/client'
 
 interface RouteContext {
-  params: { userId: string }
+  params: Promise<{ userId: string }>
 }
 
 // POST /api/users/[userId]/offboard
@@ -35,13 +35,15 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '3600' } })
   }
 
-  const idError = validateCuid(params.userId, 'userId')
+  const { userId } = await params
+
+  const idError = validateCuid(userId, 'userId')
   if (idError) {
     return NextResponse.json({ error: idError }, { status: 400 })
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { id: userId },
     select: { id: true, role: true },
   })
 
@@ -56,7 +58,7 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     )
   }
 
-  const fullyApproved = await isUserFullyApproved(params.userId)
+  const fullyApproved = await isUserFullyApproved(userId)
   if (!fullyApproved) {
     return NextResponse.json(
       { error: 'User has incomplete or unapproved tasks' },
@@ -64,7 +66,7 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     )
   }
 
-  await offboardUser(params.userId, session.user.id)
+  await offboardUser(userId, session.user.id)
 
   return NextResponse.json({ success: true })
 }

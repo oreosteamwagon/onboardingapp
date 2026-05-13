@@ -16,7 +16,7 @@ import { log } from '@/lib/logger'
 import type { Role } from '@prisma/client'
 
 interface RouteContext {
-  params: { courseId: string }
+  params: Promise<{ courseId: string }>
 }
 
 // GET /api/courses/[courseId] -- full course for authoring (HR+, includes isCorrect)
@@ -32,11 +32,13 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const cuidErr = validateCuid(params.courseId, 'courseId')
+  const { courseId } = await params
+
+  const cuidErr = validateCuid(courseId, 'courseId')
   if (cuidErr) return NextResponse.json({ error: cuidErr }, { status: 400 })
 
   const course = await prisma.course.findUnique({
-    where: { id: params.courseId },
+    where: { id: courseId },
     include: {
       questions: {
         orderBy: { order: 'asc' },
@@ -69,10 +71,12 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
-  const cuidErr = validateCuid(params.courseId, 'courseId')
+  const { courseId } = await params
+
+  const cuidErr = validateCuid(courseId, 'courseId')
   if (cuidErr) return NextResponse.json({ error: cuidErr }, { status: 400 })
 
-  const existing = await prisma.course.findUnique({ where: { id: params.courseId } })
+  const existing = await prisma.course.findUnique({ where: { id: courseId } })
   if (!existing) return NextResponse.json({ error: 'Course not found' }, { status: 404 })
 
   let body: unknown
@@ -114,11 +118,11 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
 
   const course = await prisma.$transaction(async (tx) => {
     if (questions !== undefined) {
-      await tx.courseQuestion.deleteMany({ where: { courseId: params.courseId } })
+      await tx.courseQuestion.deleteMany({ where: { courseId: courseId } })
     }
 
     return tx.course.update({
-      where: { id: params.courseId },
+      where: { id: courseId },
       data: {
         ...(title !== undefined && { title: (title as string).trim() }),
         ...(description !== undefined && {
@@ -151,7 +155,7 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
     })
   })
 
-  log({ message: 'course updated', action: 'course_update', userId: session.user.id, statusCode: 200, meta: { courseId: params.courseId } })
+  log({ message: 'course updated', action: 'course_update', userId: session.user.id, statusCode: 200, meta: { courseId: courseId } })
   return NextResponse.json(course)
 }
 
@@ -174,16 +178,18 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
-  const cuidErr = validateCuid(params.courseId, 'courseId')
+  const { courseId } = await params
+
+  const cuidErr = validateCuid(courseId, 'courseId')
   if (cuidErr) return NextResponse.json({ error: cuidErr }, { status: 400 })
 
   const existing = await prisma.course.findUnique({
-    where: { id: params.courseId },
+    where: { id: courseId },
     select: { id: true },
   })
   if (!existing) return NextResponse.json({ error: 'Course not found' }, { status: 404 })
 
-  const attemptCount = await prisma.courseAttempt.count({ where: { courseId: params.courseId } })
+  const attemptCount = await prisma.courseAttempt.count({ where: { courseId: courseId } })
   if (attemptCount > 0) {
     return NextResponse.json(
       { error: 'Cannot delete a course that has attempt records.' },
@@ -191,7 +197,7 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     )
   }
 
-  const taskCount = await prisma.onboardingTask.count({ where: { courseId: params.courseId } })
+  const taskCount = await prisma.onboardingTask.count({ where: { courseId: courseId } })
   if (taskCount > 0) {
     return NextResponse.json(
       { error: 'Cannot delete a course linked to onboarding tasks. Unlink all tasks first.' },
@@ -199,8 +205,8 @@ export async function DELETE(_req: NextRequest, { params }: RouteContext) {
     )
   }
 
-  await prisma.course.delete({ where: { id: params.courseId } })
+  await prisma.course.delete({ where: { id: courseId } })
 
-  log({ message: 'course deleted', action: 'course_delete', userId: session.user.id, statusCode: 200, meta: { courseId: params.courseId } })
+  log({ message: 'course deleted', action: 'course_delete', userId: session.user.id, statusCode: 200, meta: { courseId: courseId } })
   return NextResponse.json({ deleted: true })
 }

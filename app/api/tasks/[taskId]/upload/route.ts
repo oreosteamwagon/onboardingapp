@@ -11,7 +11,7 @@ import type { Role } from '@prisma/client'
 import { notifyApprovalNeeded } from '@/lib/email'
 
 interface RouteContext {
-  params: { taskId: string }
+  params: Promise<{ taskId: string }>
 }
 
 // POST /api/tasks/[taskId]/upload
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   // 4. Validate taskId path param before any DB or file work
-  const { taskId } = params
+  const { taskId } = await params
   if (typeof taskId !== 'string' || taskId.length === 0) {
     return NextResponse.json({ error: 'Invalid task ID' }, { status: 400 })
   }

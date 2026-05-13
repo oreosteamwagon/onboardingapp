@@ -23,7 +23,7 @@ const EXT_TO_MIME: Record<string, string> = {
 }
 
 interface RouteContext {
-  params: { documentId: string }
+  params: Promise<{ documentId: string }>
 }
 
 // GET /api/documents/[documentId]/download
@@ -39,7 +39,9 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const idError = validateCuid(params.documentId, 'documentId')
+  const { documentId } = await params
+
+  const idError = validateCuid(documentId, 'documentId')
   if (idError) {
     return NextResponse.json({ error: idError }, { status: 400 })
   }
@@ -51,7 +53,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   }
 
   const document = await prisma.document.findUnique({
-    where: { id: params.documentId },
+    where: { id: documentId },
     select: { id: true, uploadedBy: true, filename: true, storagePath: true, url: true, isResource: true, encrypted: true },
   })
 

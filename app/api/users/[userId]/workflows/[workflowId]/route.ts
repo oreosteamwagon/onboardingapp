@@ -7,7 +7,7 @@ import { verifyActiveSession } from '@/lib/session'
 import type { Role } from '@prisma/client'
 
 interface RouteContext {
-  params: { userId: string; workflowId: string }
+  params: Promise<{ userId: string; workflowId: string }>
 }
 
 // PATCH /api/users/[userId]/workflows/[workflowId] — update the assigned supervisor (HR+ only)
@@ -31,8 +31,10 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
+  const { userId, workflowId } = await params
+
   const assignment = await prisma.userWorkflow.findUnique({
-    where: { userId_workflowId: { userId: params.userId, workflowId: params.workflowId } },
+    where: { userId_workflowId: { userId, workflowId } },
   })
   if (!assignment) {
     return NextResponse.json({ error: 'Workflow assignment not found' }, { status: 404 })
@@ -69,7 +71,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   }
 
   const updated = await prisma.userWorkflow.update({
-    where: { userId_workflowId: { userId: params.userId, workflowId: params.workflowId } },
+    where: { userId_workflowId: { userId: userId, workflowId: workflowId } },
     data: { supervisorId: supervisorId === null ? null : (supervisorId as string | undefined) },
   })
 
@@ -99,8 +101,10 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
+  const { userId, workflowId } = await params
+
   const assignment = await prisma.userWorkflow.findUnique({
-    where: { userId_workflowId: { userId: params.userId, workflowId: params.workflowId } },
+    where: { userId_workflowId: { userId, workflowId } },
     include: { workflow: { include: { tasks: { select: { taskId: true } } } } },
   })
   if (!assignment) {
@@ -114,7 +118,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
 
   const completedCount = await prisma.userTask.count({
     where: {
-      userId: params.userId,
+      userId: userId,
       taskId: { in: taskIds },
       completed: true,
     },
@@ -134,15 +138,15 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     if (force && taskIds.length > 0) {
       // First clear documentId FKs (which have @unique) to allow UserTask deletion
       await tx.userTask.updateMany({
-        where: { userId: params.userId, taskId: { in: taskIds } },
+        where: { userId: userId, taskId: { in: taskIds } },
         data: { documentId: null },
       })
       await tx.userTask.deleteMany({
-        where: { userId: params.userId, taskId: { in: taskIds } },
+        where: { userId: userId, taskId: { in: taskIds } },
       })
     }
     await tx.userWorkflow.delete({
-      where: { userId_workflowId: { userId: params.userId, workflowId: params.workflowId } },
+      where: { userId_workflowId: { userId: userId, workflowId: workflowId } },
     })
   })
 

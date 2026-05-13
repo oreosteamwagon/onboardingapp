@@ -8,7 +8,7 @@ import type { Role } from '@prisma/client'
 import { notifyWorkflowAssigned } from '@/lib/email'
 
 interface RouteContext {
-  params: { userId: string }
+  params: Promise<{ userId: string }>
 }
 
 // GET /api/users/[userId]/workflows — list workflow assignments for a user (HR+ or self)
@@ -18,7 +18,9 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const isSelf = session.user.id === params.userId
+  const { userId } = await params
+
+  const isSelf = session.user.id === userId
   if (!isSelf && !canAssignWorkflows(session.user.role as Role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
@@ -28,7 +30,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   }
 
   const assignments = await prisma.userWorkflow.findMany({
-    where: { userId: params.userId },
+    where: { userId: userId },
     include: {
       workflow: {
         include: { tasks: { include: { task: true }, orderBy: { order: 'asc' } } },
@@ -65,8 +67,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   // Verify the target user exists and is active
+  const { userId } = await params
+
   const targetUser = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { id: userId },
     select: { id: true, active: true },
   })
   if (!targetUser) {
@@ -121,7 +125,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
   // Check for duplicate assignment
   const alreadyAssigned = await prisma.userWorkflow.findUnique({
-    where: { userId_workflowId: { userId: params.userId, workflowId } },
+    where: { userId_workflowId: { userId: userId, workflowId } },
   })
   if (alreadyAssigned) {
     return NextResponse.json(
@@ -134,7 +138,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   const result = await prisma.$transaction(async (tx) => {
     const userWorkflow = await tx.userWorkflow.create({
       data: {
-        userId: params.userId,
+        userId: userId,
         workflowId,
         supervisorId: typeof supervisorId === 'string' ? supervisorId : null,
         assignedById: session.user.id,
@@ -144,7 +148,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     // Bulk-create UserTask rows, skipping tasks that already have a record
     const existingTasks = await tx.userTask.findMany({
       where: {
-        userId: params.userId,
+        userId: userId,
         taskId: { in: workflow.tasks.map((t) => t.taskId) },
       },
       select: { taskId: true },
@@ -156,13 +160,13 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
     if (newTaskIds.length > 0) {
       await tx.userTask.createMany({
-        data: newTaskIds.map((taskId) => ({ userId: params.userId, taskId })),
+        data: newTaskIds.map((taskId) => ({ userId: userId, taskId })),
       })
     }
 
     return userWorkflow
   })
 
-  void notifyWorkflowAssigned(params.userId, workflowId)
+  void notifyWorkflowAssigned(userId, workflowId)
   return NextResponse.json(result, { status: 201 })
 }

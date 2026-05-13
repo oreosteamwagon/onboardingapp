@@ -10,7 +10,7 @@ const VALID_ID_RE = /^[\w\-]{1,64}$/
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth()
   if (!session?.user) {
@@ -31,7 +31,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
-  const { id } = params
+  const { id } = await params
 
   if (!id || !VALID_ID_RE.test(id)) {
     return NextResponse.json({ error: 'Invalid category id' }, { status: 400 })

@@ -12,7 +12,7 @@ const COPY_PREFIX = 'Copy of '
 const MAX_SUFFIX_LEN = ' (10)'.length
 
 interface RouteContext {
-  params: { workflowId: string }
+  params: Promise<{ workflowId: string }>
 }
 
 function buildCandidateName(sourceName: string, n: number): string {
@@ -45,8 +45,10 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
+  const { workflowId } = await params
+
   const source = await prisma.workflow.findUnique({
-    where: { id: params.workflowId },
+    where: { id: workflowId },
     include: {
       tasks: { orderBy: { order: 'asc' } },
     },
@@ -109,7 +111,7 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     action: 'workflow_duplicate',
     userId: session.user.id,
     statusCode: 201,
-    meta: { sourceWorkflowId: params.workflowId, newWorkflowId: newWorkflow.id },
+    meta: { sourceWorkflowId: workflowId, newWorkflowId: newWorkflow.id },
   })
 
   return NextResponse.json(newWorkflowWithTasks, { status: 201 })

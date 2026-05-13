@@ -10,7 +10,7 @@ import { saveUpload, UploadError } from '@/lib/upload'
 import type { Role } from '@prisma/client'
 
 interface RouteContext {
-  params: { userId: string; taskId: string }
+  params: Promise<{ userId: string; taskId: string }>
 }
 
 // POST /api/users/[userId]/tasks/[taskId]/attachments
@@ -37,18 +37,20 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } })
   }
 
-  const userIdError = validateCuid(params.userId, 'userId')
+  const { userId, taskId } = await params
+
+  const userIdError = validateCuid(userId, 'userId')
   if (userIdError) {
     return NextResponse.json({ error: userIdError }, { status: 400 })
   }
 
-  const taskIdError = validateCuid(params.taskId, 'taskId')
+  const taskIdError = validateCuid(taskId, 'taskId')
   if (taskIdError) {
     return NextResponse.json({ error: taskIdError }, { status: 400 })
   }
 
   const targetUser = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { id: userId },
     select: { id: true, active: true },
   })
 
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   const userTask = await prisma.userTask.findUnique({
-    where: { userId_taskId: { userId: params.userId, taskId: params.taskId } },
+    where: { userId_taskId: { userId: userId, taskId: taskId } },
     select: { id: true },
   })
 

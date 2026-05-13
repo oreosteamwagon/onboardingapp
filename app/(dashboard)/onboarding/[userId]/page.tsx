@@ -6,14 +6,14 @@ import type { Role } from '@prisma/client'
 import ChecklistView from './ChecklistView'
 
 interface PageProps {
-  params: { userId: string }
+  params: Promise<{ userId: string }>
 }
 
 export default async function OnboardingPage({ params }: PageProps) {
   const session = await auth()
   if (!session?.user) redirect('/login')
 
-  const viewingUserId = params.userId
+  const { userId: viewingUserId } = await params
   const isOwnPage = viewingUserId === session.user.id
   const viewerRole = session.user.role as Role
 

@@ -24,6 +24,12 @@ jest.mock('@/lib/ratelimit', () => ({
   checkTeamTasksRateLimit: jest.fn().mockResolvedValue(undefined),
   checkCourseAttemptRateLimit: jest.fn().mockResolvedValue(undefined),
 }))
+jest.mock('@/lib/email', () => ({
+  checkAndNotifyWorkflowCompletion: jest.fn().mockResolvedValue(undefined),
+}))
+jest.mock('@/lib/offboard', () => ({
+  checkAndOffboardUser: jest.fn().mockResolvedValue(undefined),
+}))
 
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
@@ -43,7 +49,7 @@ const q1Id = 'c' + 'c'.repeat(24)
 const a1Id = 'c' + 'd'.repeat(24) // correct
 const a2Id = 'c' + 'e'.repeat(24)
 
-const routeCtx = { params: { courseId } }
+const routeCtx = { params: Promise.resolve({ courseId }) }
 
 function makeRequest(body?: unknown, method = 'POST'): NextRequest {
   return new NextRequest(`http://localhost/api/courses/${courseId}/take`, {

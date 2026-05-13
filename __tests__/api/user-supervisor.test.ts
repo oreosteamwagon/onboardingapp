@@ -30,6 +30,9 @@ jest.mock('argon2', () => ({
   hash: jest.fn().mockResolvedValue('$argon2id$hashed'),
   argon2id: 'argon2id',
 }))
+jest.mock('@/lib/email', () => ({
+  notifyUserCreated: jest.fn().mockResolvedValue(undefined),
+}))
 
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
@@ -70,7 +73,7 @@ function makePatchRequest(body: unknown): NextRequest {
 }
 
 function makeContext(userId = VALID_USER_ID) {
-  return { params: { userId } }
+  return { params: Promise.resolve({ userId }) }
 }
 
 const VALID_POST_BODY = {

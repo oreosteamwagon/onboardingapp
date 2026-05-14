@@ -77,7 +77,7 @@ export default function LoginForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} noValidate method="post">
+      <form onSubmit={handleSubmit} noValidate method="post" action="/login">
         <div className="mb-4">
           <label
             htmlFor="username"

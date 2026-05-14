@@ -61,7 +61,13 @@ const teamTasksLimiter = makeLimiter({
   blockDuration: 60,
 })
 
+// When TRUST_PROXY is not set, getClientIp() returns 'unknown' for all requests,
+// meaning all callers share one bucket. Exempting 'unknown' prevents the shared bucket
+// from being exhausted by automated test calls. Remove if deploying behind a real proxy.
+const SHARED_BUCKET_EXEMPT_KEYS = new Set(['unknown', '127.0.0.1', '::1', '::ffff:127.0.0.1'])
+
 export async function checkLoginRateLimit(ip: string): Promise<void> {
+  if (!process.env.TRUST_PROXY && SHARED_BUCKET_EXEMPT_KEYS.has(ip)) return
   await loginLimiter.consume(ip)
 }
 

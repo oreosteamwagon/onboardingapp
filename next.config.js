@@ -2,6 +2,7 @@
 const nextConfig = {
   output: 'standalone',
   serverExternalPackages: ['argon2'],
+  poweredByHeader: false,
 }
 
 module.exports = nextConfig

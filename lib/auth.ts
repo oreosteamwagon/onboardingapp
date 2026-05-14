@@ -4,6 +4,8 @@ import argon2 from 'argon2'
 import { prisma } from '@/lib/db'
 import { authConfig } from '@/auth.config'
 import { logAccess } from '@/lib/logger'
+import { checkLoginRateLimit } from '@/lib/ratelimit'
+import { getClientIp } from '@/lib/ip'
 import type { Role } from '@prisma/client'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -15,7 +17,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         username: { label: 'Username', type: 'text' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
+        const ip = getClientIp((request as Request).headers)
+        try {
+          await checkLoginRateLimit(ip)
+        } catch {
+          return null
+        }
+
         if (
           typeof credentials?.username !== 'string' ||
           typeof credentials?.password !== 'string'

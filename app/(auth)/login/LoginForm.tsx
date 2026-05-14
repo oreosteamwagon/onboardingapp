@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useBranding } from '@/components/BrandingProvider'
@@ -16,6 +16,14 @@ export default function LoginForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // next-auth v5 may redirect back to /login?error=CredentialsSignin on failure
+  // instead of returning { error } from signIn(). Read the param on mount.
+  useEffect(() => {
+    if (searchParams.get('error')) {
+      setError('Invalid username or password.')
+    }
+  }, [searchParams])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -69,7 +77,7 @@ export default function LoginForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} noValidate>
+      <form onSubmit={handleSubmit} noValidate method="post">
         <div className="mb-4">
           <label
             htmlFor="username"
@@ -79,6 +87,7 @@ export default function LoginForm() {
           </label>
           <input
             id="username"
+            name="username"
             type="text"
             autoComplete="username"
             required
@@ -98,6 +107,7 @@ export default function LoginForm() {
           </label>
           <input
             id="password"
+            name="password"
             type="password"
             autoComplete="current-password"
             required

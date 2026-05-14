@@ -5,7 +5,7 @@ import type { NextRequest } from 'next/server'
 
 const { auth } = NextAuth(authConfig)
 
-const PUBLIC_PATHS = ['/login', '/api/auth', '/api/branding/logo', '/api/csp-report', '/api/health']
+const PUBLIC_PATHS = ['/login', '/api/auth', '/api/branding/logo', '/api/csp-report', '/api/health', '/robots.txt']
 
 function buildCsp(nonce: string): string {
   return [
@@ -36,6 +36,7 @@ function applySecurityHeaders(response: NextResponse, csp: string): void {
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
   response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
+  response.headers.set('X-XSS-Protection', '1; mode=block')
   response.headers.set('Reporting-Endpoints', 'csp-endpoint="/api/csp-report"')
 }
 
@@ -50,6 +51,13 @@ export default auth(function middleware(req: NextRequest & { auth: unknown }) {
   let response: NextResponse
 
   if (!PUBLIC_PATHS.some((p) => pathname.startsWith(p)) && !session?.user) {
+    if (pathname.startsWith('/api/')) {
+      const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      applySecurityHeaders(res, csp)
+      res.headers.set('X-Request-ID', requestId)
+      res.headers.set('Cache-Control', 'no-store')
+      return res
+    }
     const loginUrl = new URL('/login', req.url)
     // Only pass relative, same-origin paths to prevent open redirect via the callbackUrl parameter.
     if (pathname.startsWith('/') && !pathname.startsWith('//')) {

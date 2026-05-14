@@ -39,6 +39,7 @@ jest.mock('@/lib/ratelimit', () => ({
 }))
 jest.mock('@/lib/upload', () => ({
   saveUpload: jest.fn(),
+  saveEncryptedUpload: jest.fn(),
   UploadError: class UploadError extends Error {
     statusCode: number
     constructor(message: string, statusCode: number) {
@@ -49,12 +50,19 @@ jest.mock('@/lib/upload', () => ({
 }))
 jest.mock('fs/promises', () => ({
   readFile: jest.fn(),
+  stat: jest.fn(),
+}))
+jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
+  createReadStream: jest.fn(),
 }))
 
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { saveUpload } from '@/lib/upload'
-import { readFile } from 'fs/promises'
+import { saveUpload, saveEncryptedUpload } from '@/lib/upload'
+import { stat } from 'fs/promises'
+import { createReadStream } from 'fs'
+import { Readable } from 'stream'
 import { GET as getDocuments, POST as postDocument } from '@/app/api/documents/route'
 import { GET as downloadDocument } from '@/app/api/documents/[documentId]/download/route'
 import { POST as postTask } from '@/app/api/tasks/route'
@@ -70,7 +78,9 @@ const mockTaskCreate = prisma.onboardingTask.create as jest.MockedFunction<typeo
 const mockTaskFindUnique = prisma.onboardingTask.findUnique as jest.MockedFunction<typeof prisma.onboardingTask.findUnique>
 const mockTaskUpdate = prisma.onboardingTask.update as jest.MockedFunction<typeof prisma.onboardingTask.update>
 const mockSaveUpload = saveUpload as jest.MockedFunction<typeof saveUpload>
-const mockReadFile = readFile as jest.MockedFunction<typeof readFile>
+const mockSaveEncryptedUpload = saveEncryptedUpload as jest.MockedFunction<typeof saveEncryptedUpload>
+const mockStat = stat as jest.MockedFunction<typeof stat>
+const mockCreateReadStream = createReadStream as jest.MockedFunction<typeof createReadStream>
 
 // ---- Constants ----
 
@@ -91,12 +101,22 @@ const MOCK_RESOURCE_DOC = {
   category: 'policy',
   uploadedAt: new Date(),
   isResource: true,
+  encrypted: false,
+  sharedWithAll: true,
   uploader: { username: 'hruser' },
+}
+
+const MOCK_PRIVATE_RESOURCE_DOC = {
+  ...MOCK_RESOURCE_DOC,
+  sharedWithAll: false,
+  encrypted: false,
 }
 
 const MOCK_NON_RESOURCE_DOC = {
   ...MOCK_RESOURCE_DOC,
   isResource: false,
+  sharedWithAll: false,
+  encrypted: true,
   category: 'task-upload',
 }
 
@@ -107,18 +127,20 @@ const PDF_BUFFER = Buffer.from('%PDF-1.4 fake content')
 beforeEach(() => {
   jest.clearAllMocks()
   mockUserFindUnique.mockResolvedValue({ active: true } as never)
-  mockReadFile.mockResolvedValue(PDF_BUFFER as never)
+  mockStat.mockResolvedValue({ size: PDF_BUFFER.length } as never)
+  mockCreateReadStream.mockReturnValue(Readable.from([PDF_BUFFER]) as never)
   mockCategoryFindUnique.mockResolvedValue({ id: 'cat1' } as never)
 })
 
 // ---- POST /api/documents ----
 
 describe('POST /api/documents — Resource creation', () => {
-  function makeUploadRequest(): NextRequest {
+  function makeUploadRequest(shared = false): NextRequest {
     const formData = new FormData()
     const file = new File([PDF_BUFFER], 'policy.pdf', { type: 'application/pdf' })
     formData.append('file', file)
     formData.append('category', 'policy')
+    formData.append('sharedWithAll', String(shared))
     return new NextRequest('http://localhost/api/documents', {
       method: 'POST',
       body: formData,
@@ -126,6 +148,7 @@ describe('POST /api/documents — Resource creation', () => {
   }
 
   beforeEach(() => {
+    mockSaveEncryptedUpload.mockResolvedValue({ storagePath: 'abcd1234-uuid.pdf', filename: 'policy.pdf' })
     mockSaveUpload.mockResolvedValue({ storagePath: 'abcd1234-uuid.pdf', filename: 'policy.pdf' })
     mockDocumentCreate.mockResolvedValue(MOCK_RESOURCE_DOC as never)
   })
@@ -144,6 +167,21 @@ describe('POST /api/documents — Resource creation', () => {
     expect(res.status).toBe(201)
     const body = await res.json()
     expect(body.isResource).toBe(true)
+  })
+
+  it('uses saveEncryptedUpload when sharedWithAll is false', async () => {
+    mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
+    await postDocument(makeUploadRequest(false))
+    expect(mockSaveEncryptedUpload).toHaveBeenCalled()
+    expect(mockSaveUpload).not.toHaveBeenCalled()
+  })
+
+  it('uses saveUpload (unencrypted) when sharedWithAll is true', async () => {
+    mockAuth.mockResolvedValueOnce(makeSession('HR') as never)
+    mockDocumentCreate.mockResolvedValueOnce({ ...MOCK_RESOURCE_DOC, sharedWithAll: true, encrypted: false } as never)
+    await postDocument(makeUploadRequest(true))
+    expect(mockSaveUpload).toHaveBeenCalled()
+    expect(mockSaveEncryptedUpload).not.toHaveBeenCalled()
   })
 
   it('returns 401 when no session', async () => {
@@ -188,19 +226,28 @@ describe('GET /api/documents?type=resource — Resource listing', () => {
     expect(res.status).toBe(200)
   })
 
-  it('queries with isResource: true filter', async () => {
+  it('queries with sharedWithAll filter for USER role', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER') as never)
+    await getDocuments(makeResourceListRequest())
+    expect(mockDocumentFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { isResource: true, sharedWithAll: true } }),
+    )
+  })
+
+  it('queries without sharedWithAll filter for PAYROLL role', async () => {
+    mockAuth.mockResolvedValueOnce(makeSession('PAYROLL') as never)
     await getDocuments(makeResourceListRequest())
     expect(mockDocumentFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { isResource: true } }),
     )
   })
 
-  it('returns isResource field in each document', async () => {
+  it('returns isResource and sharedWithAll fields in each document', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER') as never)
     const res = await getDocuments(makeResourceListRequest())
     const body = await res.json()
     expect(body[0].isResource).toBe(true)
+    expect(typeof body[0].sharedWithAll).toBe('boolean')
   })
 })
 
@@ -215,12 +262,26 @@ describe('GET /api/documents/[documentId]/download — Resource access', () => {
   }
 
   function makeContext(documentId = VALID_DOC_ID) {
-    return { params: { documentId } }
+    return { params: Promise.resolve({ documentId }) }
   }
 
-  it('returns 200 for USER role when document isResource: true', async () => {
+  it('returns 200 for USER role when sharedWithAll: true', async () => {
     mockAuth.mockResolvedValueOnce(makeSession('USER') as never)
-    mockDocumentFindUnique.mockResolvedValueOnce(MOCK_RESOURCE_DOC as never)
+    mockDocumentFindUnique.mockResolvedValueOnce(MOCK_RESOURCE_DOC as never) // sharedWithAll: true
+    const res = await downloadDocument(makeDownloadRequest(), makeContext())
+    expect(res.status).toBe(200)
+  })
+
+  it('returns 403 for USER role when isResource: true but sharedWithAll: false', async () => {
+    mockAuth.mockResolvedValueOnce(makeSession('USER', USER_ID) as never)
+    mockDocumentFindUnique.mockResolvedValueOnce(MOCK_PRIVATE_RESOURCE_DOC as never)
+    const res = await downloadDocument(makeDownloadRequest(), makeContext())
+    expect(res.status).toBe(403)
+  })
+
+  it('returns 200 for PAYROLL role when isResource: true and sharedWithAll: false', async () => {
+    mockAuth.mockResolvedValueOnce(makeSession('PAYROLL', USER_ID) as never)
+    mockDocumentFindUnique.mockResolvedValueOnce(MOCK_PRIVATE_RESOURCE_DOC as never)
     const res = await downloadDocument(makeDownloadRequest(), makeContext())
     expect(res.status).toBe(200)
   })
@@ -330,7 +391,7 @@ describe('POST /api/tasks — resourceDocumentId handling', () => {
 
 describe('PUT /api/tasks/[taskId] — resource update', () => {
   function makeContext(taskId = VALID_TASK_ID) {
-    return { params: { taskId } }
+    return { params: Promise.resolve({ taskId }) }
   }
 
   function makeUpdateRequest(body: object): NextRequest {

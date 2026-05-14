@@ -16,7 +16,7 @@ export default async function ResourcesPage() {
 
   const visibilityFilter = canViewAllDocuments(role)
     ? {}
-    : { uploadedBy: session.user.id }
+    : { OR: [{ uploadedBy: session.user.id }, { sharedWithAll: true }] }
 
   const [documents, categories, taskUploadDocs] = await Promise.all([
     prisma.document.findMany({
@@ -51,6 +51,7 @@ export default async function ResourcesPage() {
     uploadedAt: d.uploadedAt.toISOString(),
     uploaderName: d.uploader.username,
     isResource: d.isResource,
+    sharedWithAll: d.sharedWithAll,
   }))
 
   // Group task uploads by uploader for the privileged section

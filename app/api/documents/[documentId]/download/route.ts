@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
-import { canDownloadDocument, canDownloadTaskUpload } from '@/lib/permissions'
+import { canDownloadDocument, canDownloadTaskUpload, canUploadDocuments } from '@/lib/permissions'
 import { checkDocumentDownloadRateLimit } from '@/lib/ratelimit'
 import { logError } from '@/lib/logger'
 import { validateCuid } from '@/lib/validation'
@@ -54,7 +54,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
   const document = await prisma.document.findUnique({
     where: { id: documentId },
-    select: { id: true, uploadedBy: true, filename: true, storagePath: true, url: true, isResource: true, encrypted: true },
+    select: { id: true, uploadedBy: true, filename: true, storagePath: true, url: true, isResource: true, encrypted: true, sharedWithAll: true },
   })
 
   if (!document) {
@@ -80,14 +80,26 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
   const isUploader = session.user.id === document.uploadedBy
   const role = session.user.role as Role
 
-  // Resources are downloadable by any authenticated user.
-  // Encrypted task submissions require HR+; other non-resource docs require SUPERVISOR+.
-  if (!document.isResource && !isUploader) {
-    const allowed = document.encrypted
-      ? canDownloadTaskUpload(role)
-      : canDownloadDocument(role)
-    if (!allowed) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  // Access rules (evaluated in order, first match wins):
+  //   uploader          → always allowed
+  //   sharedWithAll     → any authenticated user
+  //   non-shared resource → PAYROLL+ only
+  //   encrypted task upload → HR+ only
+  //   other non-resource → SUPERVISOR+
+  if (!isUploader) {
+    if (document.sharedWithAll) {
+      // shared with everyone — no further check needed
+    } else if (document.isResource) {
+      if (!canUploadDocuments(role)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    } else {
+      const allowed = document.encrypted
+        ? canDownloadTaskUpload(role)
+        : canDownloadDocument(role)
+      if (!allowed) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
   }
 

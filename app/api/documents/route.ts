@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { canUploadDocuments, canViewAllDocuments } from '@/lib/permissions'
-import { saveEncryptedUpload, UploadError } from '@/lib/upload'
+import { saveUpload, saveEncryptedUpload, UploadError } from '@/lib/upload'
 import { checkUploadRateLimit } from '@/lib/ratelimit'
 import { verifyActiveSession } from '@/lib/session'
 import { logError, log } from '@/lib/logger'
@@ -23,13 +23,15 @@ export async function GET(req: NextRequest) {
   const role = session.user.role as Role
 
   let whereClause: Record<string, unknown>
+  const isPrivileged = canViewAllDocuments(role)
   if (type === 'resource') {
-    // Any authenticated user may list resource documents
-    whereClause = { isResource: true }
+    whereClause = isPrivileged
+      ? { isResource: true }
+      : { isResource: true, sharedWithAll: true }
   } else {
-    whereClause = canViewAllDocuments(role)
+    whereClause = isPrivileged
       ? {}
-      : { uploadedBy: session.user.id }
+      : { OR: [{ uploadedBy: session.user.id }, { sharedWithAll: true }] }
   }
 
   const documents = await prisma.document.findMany({
@@ -49,6 +51,7 @@ export async function GET(req: NextRequest) {
       uploadedAt: d.uploadedAt.toISOString(),
       uploaderName: d.uploader.username,
       isResource: d.isResource,
+      sharedWithAll: d.sharedWithAll,
     })),
   )
 }
@@ -87,7 +90,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
     }
 
-    const { title, url, category } = body as Record<string, unknown>
+    const { title, url, category, sharedWithAll } = body as Record<string, unknown>
 
     const titleError = validateTitle(title)
     if (titleError) return NextResponse.json({ error: titleError }, { status: 400 })
@@ -103,6 +106,8 @@ export async function POST(req: NextRequest) {
     })
     if (!categoryRecord) return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
 
+    const isShared = sharedWithAll === true
+
     const doc = await prisma.document.create({
       data: {
         uploadedBy: session.user.id,
@@ -111,13 +116,14 @@ export async function POST(req: NextRequest) {
         storagePath: null,
         category: categoryStr,
         isResource: true,
+        sharedWithAll: isShared,
       },
       include: {
         uploader: { select: { username: true } },
       },
     })
 
-    log({ message: 'web link created', action: 'document_create', userId: session.user.id, statusCode: 201, meta: { documentId: doc.id, category: doc.category } })
+    log({ message: 'web link created', action: 'document_create', userId: session.user.id, statusCode: 201, meta: { documentId: doc.id, category: doc.category, sharedWithAll: isShared } })
     return NextResponse.json(
       {
         id: doc.id,
@@ -127,6 +133,7 @@ export async function POST(req: NextRequest) {
         uploadedAt: doc.uploadedAt.toISOString(),
         uploaderName: doc.uploader.username,
         isResource: doc.isResource,
+        sharedWithAll: doc.sharedWithAll,
       },
       { status: 201 },
     )
@@ -142,6 +149,8 @@ export async function POST(req: NextRequest) {
 
   const file = formData.get('file')
   const category = formData.get('category')
+  const sharedWithAllRaw = formData.get('sharedWithAll')
+  const isShared = sharedWithAllRaw === 'true'
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
@@ -161,7 +170,10 @@ export async function POST(req: NextRequest) {
   let filename: string
 
   try {
-    const result = await saveEncryptedUpload(buffer, file.name)
+    // Shared resources are stored unencrypted for direct streaming; private uploads are encrypted.
+    const result = isShared
+      ? await saveUpload(buffer, file.name)
+      : await saveEncryptedUpload(buffer, file.name)
     storagePath = result.storagePath
     filename = result.filename
   } catch (err) {
@@ -179,14 +191,15 @@ export async function POST(req: NextRequest) {
       storagePath,
       category: categoryStr,
       isResource: true,
-      encrypted: true,
+      encrypted: !isShared,
+      sharedWithAll: isShared,
     },
     include: {
       uploader: { select: { username: true } },
     },
   })
 
-  log({ message: 'document uploaded', action: 'document_create', userId: session.user.id, statusCode: 201, meta: { documentId: doc.id, category: doc.category } })
+  log({ message: 'document uploaded', action: 'document_create', userId: session.user.id, statusCode: 201, meta: { documentId: doc.id, category: doc.category, sharedWithAll: isShared } })
   return NextResponse.json(
     {
       id: doc.id,
@@ -196,6 +209,7 @@ export async function POST(req: NextRequest) {
       uploadedAt: doc.uploadedAt.toISOString(),
       uploaderName: doc.uploader.username,
       isResource: doc.isResource,
+      sharedWithAll: doc.sharedWithAll,
     },
     { status: 201 },
   )

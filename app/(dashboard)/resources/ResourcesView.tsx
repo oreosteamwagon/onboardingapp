@@ -11,6 +11,7 @@ interface Resource {
   uploadedAt: string
   uploaderName: string
   isResource: boolean
+  sharedWithAll: boolean
 }
 
 interface Category {
@@ -51,9 +52,11 @@ export default function ResourcesView({
   const [resources, setResources] = useState(initial)
   const [file, setFile] = useState<File | null>(null)
   const [fileCategory, setFileCategory] = useState(categories[0]?.slug ?? 'general')
+  const [fileShared, setFileShared] = useState(false)
   const [linkTitle, setLinkTitle] = useState('')
   const [linkUrl, setLinkUrl] = useState('')
   const [linkCategory, setLinkCategory] = useState(categories[0]?.slug ?? 'general')
+  const [linkShared, setLinkShared] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [addingLink, setAddingLink] = useState(false)
@@ -70,6 +73,7 @@ export default function ResourcesView({
       const formData = new FormData()
       formData.append('file', file)
       formData.append('category', fileCategory)
+      formData.append('sharedWithAll', String(fileShared))
 
       const res = await fetch('/api/documents', {
         method: 'POST',
@@ -84,6 +88,7 @@ export default function ResourcesView({
 
       setResources((prev) => [data, ...prev])
       setFile(null)
+      setFileShared(false)
       router.refresh()
     } catch {
       setError('Unexpected error during upload.')
@@ -101,7 +106,7 @@ export default function ResourcesView({
       const res = await fetch('/api/documents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: linkTitle, url: linkUrl, category: linkCategory }),
+        body: JSON.stringify({ title: linkTitle, url: linkUrl, category: linkCategory, sharedWithAll: linkShared }),
       })
 
       const data = await res.json()
@@ -113,6 +118,7 @@ export default function ResourcesView({
       setResources((prev) => [data, ...prev])
       setLinkTitle('')
       setLinkUrl('')
+      setLinkShared(false)
       router.refresh()
     } catch {
       setError('Unexpected error adding web link.')
@@ -187,6 +193,15 @@ export default function ResourcesView({
                 ))}
               </select>
             </div>
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={fileShared}
+                onChange={(e) => setFileShared(e.target.checked)}
+                className="rounded border-gray-300 text-primary"
+              />
+              Share with all users
+            </label>
             <button
               type="submit"
               disabled={uploading || !file}
@@ -241,6 +256,15 @@ export default function ResourcesView({
                 ))}
               </select>
             </div>
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={linkShared}
+                onChange={(e) => setLinkShared(e.target.checked)}
+                className="rounded border-gray-300 text-primary"
+              />
+              Share with all users
+            </label>
             <button
               type="submit"
               disabled={addingLink || !linkTitle || !linkUrl}
@@ -287,15 +311,22 @@ export default function ResourcesView({
                     )}
                   </td>
                   <td className="px-6 py-4 text-sm">
-                    {r.url ? (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                        Web Link
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        File
-                      </span>
-                    )}
+                    <span className="flex items-center gap-1.5 flex-wrap">
+                      {r.url ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                          Web Link
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          File
+                        </span>
+                      )}
+                      {r.sharedWithAll && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Shared
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600 capitalize">
                     {r.category}

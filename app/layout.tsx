@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { BrandingProvider } from '@/components/BrandingProvider'
+import Footer from '@/components/ui/Footer'
 import { prisma } from '@/lib/db'
 import { sanitizeHexColor } from '@/lib/validation'
 
@@ -37,14 +38,15 @@ export default async function RootLayout({
   return (
     <html lang="en" style={cssVars}>
       <head />
-      <body>
+      <body className="flex flex-col min-h-screen">
         <BrandingProvider
           orgName={branding?.orgName ?? 'My Organization'}
           logoPath={branding?.logoPath ?? null}
           primaryColor={branding?.primaryColor ?? '#2563eb'}
           accentColor={branding?.accentColor ?? '#7c3aed'}
         >
-          {children}
+          <div className="flex-1">{children}</div>
+          <Footer />
         </BrandingProvider>
       </body>
     </html>

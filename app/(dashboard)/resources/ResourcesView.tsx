@@ -307,7 +307,12 @@ export default function ResourcesView({
                         {r.filename}
                       </a>
                     ) : (
-                      <span>{r.filename}</span>
+		      <a
+	                href={`/api/documents/${r.id}/download`}
+                        className="text-indigo-600 hover:underline"
+                      >
+                        {r.filename}
+                      </a>
                     )}
                   </td>
                   <td className="px-6 py-4 text-sm">

@@ -333,7 +333,7 @@ export default function ResourcesView({
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">{r.uploaderName}</td>
                   <td className="px-6 py-4 text-sm text-gray-500">
-                    {new Date(r.uploadedAt).toLocaleDateString()}
+                    {new Date(r.uploadedAt).toLocaleDateString('en-US', { timeZone: 'UTC' })}
                   </td>
                   {canDelete && (
                     <td className="px-6 py-4 text-sm text-right whitespace-nowrap">
@@ -395,7 +395,7 @@ export default function ResourcesView({
                           <tr key={f.id} className="hover:bg-gray-50">
                             <td className="px-6 py-3 text-sm text-gray-800">{f.filename}</td>
                             <td className="px-6 py-3 text-sm text-gray-500 whitespace-nowrap">
-                              {new Date(f.uploadedAt).toLocaleDateString()}
+                              {new Date(f.uploadedAt).toLocaleDateString('en-US', { timeZone: 'UTC' })}
                             </td>
                             <td className="px-6 py-3 text-sm text-right whitespace-nowrap">
                               <a

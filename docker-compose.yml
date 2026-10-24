@@ -15,7 +15,10 @@ services:
       - frontend
       - backend
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      # 127.0.0.1, not localhost: in this Docker networking setup "localhost"
+      # resolves to the IPv6 loopback only, and the app listens on IPv4 only,
+      # so wget gets "connection refused" every time against the hostname.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/health"]
       interval: 15s
       timeout: 5s
       retries: 3

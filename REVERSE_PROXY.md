@@ -69,6 +69,16 @@ onboarding.corp.example.com {
     respond /uploads/* 404
 
     # -------------------------------------------------------------------
+    # Reject compressed request bodies (CVE-2026-111497, "Node2Shell" /
+    # "HTTP2Shell"). This app never expects a compressed request body, and
+    # decompressing untrusted Brotli data is unsafe on any runtime still
+    # carrying the vulnerable decoder. Defense in depth even after the app
+    # container's Node runtime is patched -- keep this regardless.
+    # -------------------------------------------------------------------
+    @badEncoding header Content-Encoding br
+    respond @badEncoding 415
+
+    # -------------------------------------------------------------------
     # Health check endpoint (no rate limiting, no access log)
     # -------------------------------------------------------------------
     handle /api/health {
@@ -195,6 +205,17 @@ server {
     }
 
     # -------------------------------------------------------------------
+    # Reject compressed request bodies (CVE-2026-111497, "Node2Shell" /
+    # "HTTP2Shell"). This app never expects a compressed request body, and
+    # decompressing untrusted Brotli data is unsafe on any runtime still
+    # carrying the vulnerable decoder. Defense in depth even after the app
+    # container's Node runtime is patched -- keep this regardless.
+    # -------------------------------------------------------------------
+    if ($http_content_encoding ~* "br") {
+        return 415;
+    }
+
+    # -------------------------------------------------------------------
     # Proxy to app
     # -------------------------------------------------------------------
     location / {
@@ -267,6 +288,24 @@ server {
 
 ---
 
+## Compensating Control: Reject Compressed Request Bodies (CVE-2026-111497)
+
+On 2026-10-21, CVE-2026-111497 ("Node2Shell" / "HTTP2Shell") was disclosed: a critical
+out-of-bounds write in the Brotli decompression library used by Node.js, affecting any process
+that decompresses untrusted Brotli (`Content-Encoding: br`) data. The app's Node runtime is
+patched (see `Dockerfile`), but rejecting `Content-Encoding: br` at the proxy is kept as defense
+in depth, since this app has no legitimate use case that requires a client to send a compressed
+request body. Both configs above include this (`respond @badEncoding 415` in Caddy, the
+`$http_content_encoding` check in Nginx). Apply the equivalent block if using a different proxy
+(Traefik, HAProxy, etc.).
+
+If this proxy itself compresses *responses* with Brotli (separate from the above -- that's
+encoding, not decoding), confirm its own bundled libbrotli is also patched (>=1.0.10 / 1.1.1 /
+1.2.1) -- Nginx's brotli module and Caddy both vendor their own copy, independent of this app's
+Node runtime.
+
+---
+
 ## Verification
 
 After deploying the proxy, verify these behaviors:
@@ -303,4 +342,8 @@ curl -sI https://onboarding.corp.example.com/api/tasks | grep -i cache-control
 # 8. Security headers present
 curl -sI https://onboarding.corp.example.com/login | grep -iE '(strict-transport|content-security-policy|x-frame)'
 # Expect: HSTS, CSP, X-Frame-Options: DENY
+
+# 9. Compressed request bodies rejected (CVE-2026-111497 compensating control)
+curl -sI -X POST -H "Content-Encoding: br" https://onboarding.corp.example.com/api/health
+# Expect: 415
 ```

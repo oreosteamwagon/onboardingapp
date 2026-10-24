@@ -1,4 +1,11 @@
-FROM node:20-alpine AS base
+FROM node:24.22.1-alpine AS base
+# Pinned to 24.22.1+ to carry the fix for CVE-2026-111497 ("Node2Shell" /
+# "HTTP2Shell"), a critical out-of-bounds write in Node's bundled Brotli
+# decoder affecting Node <=22.23.3 / <=24.22.0 / <=26.12.0. Node 20 (the
+# previous base) is EOL as of 2026-04-30 and will never receive this fix --
+# do not downgrade the major version. Pin the exact patch version here (not
+# a floating `node:24-alpine` tag) so a future base-image pull can't silently
+# resolve back to a vulnerable patch level.
 
 # ---- deps ----
 FROM base AS deps

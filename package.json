@@ -2,6 +2,9 @@
   "name": "onboarding-app",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=24.22.1 <25"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -40,11 +43,13 @@
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
-    "@types/node": "^20.17.6",
+    "@types/node": "^24.19.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/sanitize-html": "^2.16.1",
     "autoprefixer": "^10.4.20",
+    "eslint": "^10.3.0",
+    "eslint-config-next": "^16.2.6",
     "jest": "^29.7.0",
     "postcss": "^8.4.49",
     "prisma": "^5.22.0",
